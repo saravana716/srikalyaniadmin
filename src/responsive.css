@@ -1,0 +1,700 @@
+/* Mobile Breakpoint */
+@media (max-width: 768px) {
+
+    /* Login Page */
+    .login-container {
+        flex-direction: column !important;
+        background-size: cover !important;
+        background-position: center !important;
+    }
+
+    .login-content-wrapper {
+        flex-direction: column !important;
+        width: 100% !important;
+    }
+
+    .login-left-spacer {
+        display: none !important;
+    }
+
+    .login-form-section {
+        width: 100% !important;
+        padding: 20px !important;
+        /* Make background subtle or transparent if image is important. 
+           User wants full screen bg, form on top. 
+           Let's use a semi-transparent white or just transparent if text is readable */
+        background-color: transparent !important;
+        height: 100% !important;
+        flex: 1 !important;
+        justify-content: center !important;
+        align-items: center !important;
+        display: flex !important;
+    }
+
+    .login-form-container {
+        width: 100% !important;
+        max-width: 90% !important;
+        /* Prevent edge touching */
+        padding: 20px !important;
+        background: rgba(255, 255, 255, 0.85);
+        /* Card look for readability */
+        border-radius: 16px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        margin: auto;
+        /* Center vertically/horizontally */
+    }
+
+    .login-input-group {
+        width: 100% !important;
+    }
+
+    .login-input-group input {
+        width: 100% !important;
+        box-sizing: border-box !important;
+        /* Crucial for padding */
+    }
+
+    /* Dashboard */
+    .dashboard-container {
+        flex-direction: column;
+    }
+
+    .dashboard-main {
+        margin-left: 0 !important;
+        width: 100%;
+        padding: 16px !important;
+        max-width: 100vw !important;
+    }
+
+    /* Sidebar */
+    .sidebar {
+        transform: translateX(-100%);
+        z-index: 1000;
+        transition: transform 0.3s ease;
+    }
+
+    .sidebar.open {
+        transform: translateX(0);
+    }
+
+    .sidebar-overlay {
+        display: block;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 999;
+    }
+
+    /* Dashboard Header - left-align hamburger + title on mobile */
+    .dashboard-header {
+        flex-direction: column;
+        align-items: flex-start;
+        justify-content: flex-start;
+        gap: 16px;
+    }
+
+    .dashboard-header > div:first-child {
+        justify-content: flex-start !important;
+        align-self: flex-start !important;
+        width: auto !important;
+    }
+
+    .dashboard-header-actions {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .search-container {
+        width: 100% !important;
+    }
+
+    /* Stats Row */
+    .stats-row {
+        flex-direction: column;
+    }
+
+    .stats-card {
+        width: 100%;
+    }
+
+    /* Charts Row */
+    .charts-row {
+        flex-direction: column;
+    }
+
+    .chart-card {
+        width: 100% !important;
+        flex: none !important;
+        margin-bottom: 20px;
+    }
+
+    /* Table */
+    .payment-table-wrapper {
+        overflow-x: scroll;
+    }
+
+    /* Customers page */
+    .customers-main {
+        margin-left: 0 !important;
+        padding: 16px !important;
+    }
+
+    .customers-header {
+        flex-direction: column;
+        align-items: flex-start;
+        justify-content: flex-start;
+        gap: 16px;
+    }
+
+    .customers-header > div:first-child {
+        justify-content: flex-start !important;
+        align-self: flex-start !important;
+        width: auto !important;
+    }
+
+    .customers-header .dashboard-header-actions {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .customers-header .search-container {
+        width: 100% !important;
+        max-width: 100%;
+    }
+
+    .customers-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .customers-toolbar .filters {
+        order: 1;
+        flex-wrap: wrap;
+    }
+
+    .customers-toolbar .add-btn {
+        order: 2;
+        width: 100%;
+        text-align: center;
+    }
+
+    /* Hide table on mobile, show cards */
+    .customers-table-wrap {
+        display: none !important;
+    }
+
+    .customers-cards {
+        display: block !important;
+    }
+
+    .customers-cards .customer-card {
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 12px;
+        background: #fff;
+    }
+
+    .customers-pagination {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+
+    .customers-pagination .pagination-controls {
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+
+    /* Add Customer modal - mobile */
+    .add-customer-modal-overlay {
+        padding: 16px !important;
+        align-items: flex-start !important;
+        padding-top: 24px !important;
+    }
+
+    .add-customer-modal-box {
+        max-width: 100% !important;
+    }
+
+    .add-customer-modal-footer {
+        flex-direction: column !important;
+    }
+
+    .add-customer-modal-footer button {
+        width: 100% !important;
+    }
+
+    /* Chit Fund Plans page */
+    .plans-main {
+        margin-left: 0 !important;
+        padding: 16px !important;
+    }
+
+    .plans-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+    }
+
+    .plans-header .dashboard-header-actions {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .plans-header .search-container {
+        width: 100% !important;
+        max-width: 100%;
+    }
+
+    .plans-cards-row {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .plans-summary-card {
+        min-width: 100% !important;
+    }
+
+    .plans-table-wrap {
+        display: none !important;
+    }
+
+    .plans-cards {
+        display: block !important;
+    }
+
+    .plans-cards .plan-card {
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 12px;
+        background: #fff;
+    }
+
+    .plans-pagination {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+
+    .plans-pagination .pagination-controls {
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+
+    /* Add/Edit Plan modal - mobile */
+    .add-edit-plan-modal-overlay {
+        padding: 16px !important;
+        align-items: flex-start !important;
+        padding-top: 24px !important;
+    }
+
+    .add-edit-plan-modal-box {
+        max-width: 100% !important;
+    }
+
+    .add-edit-plan-modal-footer {
+        flex-direction: column !important;
+    }
+
+    .add-edit-plan-modal-footer button {
+        width: 100% !important;
+    }
+
+    .plans-toolbar .add-plan-btn {
+        width: 100%;
+    }
+
+    /* Payment page */
+    .payment-main {
+        margin-left: 0 !important;
+        padding: 16px !important;
+    }
+
+    .payment-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+    }
+
+    .payment-header .dashboard-header-actions {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .payment-header .search-container {
+        width: 100% !important;
+        max-width: 100%;
+    }
+
+    .payment-table-wrap {
+        display: none !important;
+    }
+
+    .payment-cards {
+        display: block !important;
+    }
+
+    .payment-cards .payment-card {
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 12px;
+        background: #fff;
+    }
+
+    .payment-pagination {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+
+    .payment-pagination .pagination-controls {
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+
+    /* Installments page */
+    .installments-main {
+        margin-left: 0 !important;
+        padding: 16px !important;
+    }
+
+    .installments-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+    }
+
+    .installments-header .dashboard-header-actions {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .installments-header .search-container {
+        width: 100% !important;
+        max-width: 100%;
+    }
+
+    .installments-scheme-cards {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .installments-scheme-card {
+        min-width: 100% !important;
+    }
+
+    .installments-customer-table-wrap,
+    .installments-history-table-wrap {
+        display: none !important;
+    }
+
+    .installments-customer-cards,
+    .installments-history-cards {
+        display: block !important;
+    }
+
+    .installments-customer-cards .installments-customer-card,
+    .installments-history-cards .installments-history-card {
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 12px;
+        background: #fff;
+    }
+
+    /* Installment View more modal - mobile */
+    .installment-view-modal-overlay {
+        padding: 16px !important;
+        align-items: flex-start !important;
+        padding-top: 24px !important;
+    }
+
+    .installment-view-modal-box {
+        max-width: 100% !important;
+        max-height: 85vh !important;
+    }
+
+    .installment-view-modal-details > div {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 4px !important;
+    }
+
+    .installment-view-modal-footer {
+        flex-direction: column !important;
+    }
+
+    .installment-view-modal-footer button {
+        width: 100% !important;
+    }
+
+    /* Payment View more: right-side panel - mobile */
+    .payment-view-more-panel-overlay {
+        padding: 0 !important;
+        justify-content: flex-end !important;
+    }
+
+    .payment-view-more-panel {
+        max-width: 100% !important;
+        height: 100% !important;
+        max-height: none !important;
+    }
+
+    .payment-view-modal-details > div {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 4px !important;
+    }
+
+    .payment-view-modal-footer {
+        flex-direction: column !important;
+    }
+
+    .payment-view-modal-footer button {
+        width: 100% !important;
+    }
+
+    /* View more modal - mobile */
+    .view-more-modal-overlay {
+        padding: 16px !important;
+        align-items: flex-start !important;
+        padding-top: 24px !important;
+    }
+
+    /* Plans View more: keep right-side panel on mobile */
+    .plans-view-more-panel-overlay {
+        padding: 0 !important;
+        justify-content: flex-end !important;
+    }
+
+    .plans-view-more-panel {
+        max-width: 100% !important;
+        height: 100% !important;
+        max-height: none !important;
+    }
+
+    .view-more-modal-box {
+        max-width: 100% !important;
+        max-height: 85vh !important;
+    }
+
+    .view-more-modal-box .view-more-modal-details {
+        grid-template-columns: 1fr !important;
+    }
+
+    .view-more-modal-details > div {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 4px !important;
+    }
+
+    .view-more-modal-box .view-more-modal-footer {
+        flex-direction: column !important;
+    }
+
+    .view-more-modal-box .view-more-modal-footer button {
+        width: 100% !important;
+    }
+
+    /* Settings page */
+    .settings-main {
+        margin-left: 0 !important;
+        padding: 16px !important;
+    }
+
+    .settings-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+    }
+
+    .settings-header .dashboard-header-actions {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .settings-header .search-container {
+        width: 100% !important;
+        max-width: 100%;
+    }
+
+    .settings-cards-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* Gold Rate Manage page */
+    .gold-rate-main {
+        margin-left: 0 !important;
+        padding: 16px !important;
+    }
+
+    .gold-rate-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+    }
+
+    .gold-rate-header .dashboard-header-actions {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .gold-rate-header .search-container {
+        width: 100% !important;
+        max-width: 100%;
+    }
+
+    .gold-rate-top-row {
+        flex-direction: column;
+    }
+
+    .gold-rate-input-card,
+    .gold-rate-display-card {
+        min-width: 100% !important;
+    }
+
+    .gold-rate-pagination {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+
+    .gold-rate-pagination .pagination-controls {
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+
+    /* Reports page */
+    .reports-main {
+        margin-left: 0 !important;
+        padding: 16px !important;
+    }
+
+    .reports-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+    }
+
+    .reports-header .dashboard-header-actions {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .reports-header .search-container {
+        width: 100% !important;
+        max-width: 100%;
+    }
+
+    .reports-cards-grid {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+/* Tablet: keep table but allow horizontal scroll */
+@media (max-width: 1024px) and (min-width: 769px) {
+    .customers-main {
+        padding: 20px 24px !important;
+    }
+
+    .customers-table-wrap {
+        margin-left: -24px;
+        margin-right: -24px;
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+    }
+
+    .customers-cards {
+        display: none !important;
+    }
+
+    .plans-main {
+        padding: 20px 24px !important;
+    }
+
+    .plans-table-wrap {
+        margin-left: -24px;
+        margin-right: -24px;
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+    }
+
+    .plans-cards {
+        display: none !important;
+    }
+
+    .payment-main {
+        padding: 20px 24px !important;
+    }
+
+    .payment-table-wrap {
+        margin-left: -24px;
+        margin-right: -24px;
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+    }
+
+    .payment-cards {
+        display: none !important;
+    }
+
+    .installments-main {
+        padding: 20px 24px !important;
+    }
+
+    .installments-customer-table-wrap,
+    .installments-history-table-wrap {
+        margin-left: -24px;
+        margin-right: -24px;
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+    }
+
+    .installments-customer-cards,
+    .installments-history-cards {
+        display: none !important;
+    }
+
+    .settings-main,
+    .gold-rate-main,
+    .reports-main {
+        padding: 20px 24px !important;
+    }
+
+    .settings-cards-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+
+    .reports-cards-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+}
+
+/* Show Hamburger and Close Button on Mobile */
+.mobile-hamburger {
+    display: none;
+}
+
+.sidebar-close-btn {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .mobile-hamburger {
+        display: block !important;
+    }
+
+    .sidebar-close-btn {
+        display: block !important;
+    }
+}

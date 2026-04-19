@@ -1,0 +1,86 @@
+/* Basic Cleanup */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --primary: #5c202a; /* Dark Red/Brown */
+  --secondary: #d4af37; /* Gold */
+  --bg-light: #fef9f3; /* Cream */
+  --text-dark: #333333;
+  --text-light: #666666;
+  --border-color: #e0e0e0;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Outfit', sans-serif;
+}
+
+body {
+  background-color: var(--bg-light);
+  color: var(--text-dark);
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+/* Table header sort icons */
+.th-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Action dropdown menu items */
+.action-dropdown button:hover {
+  background-color: #f0f0f0;
+}
+
+/* Portal action menu (outside table, high z-index) */
+.action-dropdown-portal {
+  z-index: 99999;
+}
+.action-dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 10px 16px;
+  text-align: left;
+  border: none;
+  background: none;
+  font-size: 14px;
+  color: #333;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.action-dropdown-item:hover {
+  background-color: #f0f0f0;
+}
+
+/* Right-side View more panel (Chit Fund Plans) */
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0.8;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.plans-view-more-panel,
+.payment-view-more-panel {
+  animation: slideInRight 0.3s ease-out;
+}
+
+/* Dashboard-style menu icon: left side only, same on all pages */
+.mobile-hamburger {
+  margin-right: 0 !important;
+  background: none !important;
+  border: none !important;
+  cursor: pointer;
+  padding: 0;
+}
