@@ -260,11 +260,12 @@
     }
 
     .plans-table-wrap {
-        display: none !important;
+        display: block !important;
+        overflow-x: auto;
     }
 
     .plans-cards {
-        display: block !important;
+        display: none !important;
     }
 
     .plans-cards .plan-card {

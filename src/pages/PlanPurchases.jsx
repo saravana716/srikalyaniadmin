@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
 import ActionMenu from '../components/ActionMenu';
-import { FiSearch, FiSettings, FiBell, FiMenu, FiX } from 'react-icons/fi';
+import Button from '../components/Button';
+import { FiSettings, FiBell, FiMenu, FiX } from 'react-icons/fi';
 import { MdKeyboardArrowUp, MdKeyboardArrowDown } from 'react-icons/md';
 import {
   subscribePlanPurchases,
@@ -11,12 +12,13 @@ import {
 } from '../services/planPurchasesService';
 import { subscribeCustomers } from '../services/customersService';
 import { subscribePlans } from '../services/plansService';
+import PlanPurchaseDetailModal from '../components/PlanPurchaseDetailModal';
 
 const MAROON = '#801A39';
 const LIGHT_GRAY = '#F0F0F0';
 const BORDER_GRAY = '#e0e0e0';
 
-const AddEditPlanPurchaseModal = ({ planPurchase, onClose, onSave, error, customers, plans }) => {
+const AddEditPlanPurchaseModal = ({ planPurchase, onClose, onSave, error, customers, plans, saving }) => {
   const isEdit = !!planPurchase;
   const [customerId, setCustomerId] = useState(planPurchase?.customerId ?? '');
   const [customerName, setCustomerName] = useState(planPurchase?.customerName ?? '');
@@ -49,13 +51,14 @@ const AddEditPlanPurchaseModal = ({ planPurchase, onClose, onSave, error, custom
     const selected = plans.find(p => p.id === val);
     if (selected) {
       setPlanId(selected.id);
-      setPlanName(selected.planName);
+      setPlanName(selected.name || selected.planName);
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    onSave({ customerId, customerName, planId, planName, startDate, status }, planPurchase?.id);
+    if (saving) return;
+    await onSave({ customerId, customerName, planId, planName, startDate, status }, planPurchase?.id);
   };
 
   return (
@@ -96,7 +99,7 @@ const AddEditPlanPurchaseModal = ({ planPurchase, onClose, onSave, error, custom
               <option value="">Select a Plan</option>
               {plans.map(p => (
                 <option key={p.id} value={p.id}>
-                  {p.planName}
+                  {p.name || p.planName}
                 </option>
               ))}
             </select>
@@ -114,8 +117,10 @@ const AddEditPlanPurchaseModal = ({ planPurchase, onClose, onSave, error, custom
             </select>
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 20 }}>
-            <button type="button" style={styles.modalBtnCancel} onClick={onClose}>Cancel</button>
-            <button type="submit" style={styles.modalBtnPrimary}>{isEdit ? 'Update' : 'Add Plan Purchase'}</button>
+            <Button type="button" variant="secondary" onClick={onClose} disabled={saving} style={styles.modalBtnCancel}>Cancel</Button>
+            <Button type="submit" loading={saving} loadingText={isEdit ? 'Updating…' : 'Adding…'} style={styles.modalBtnPrimary}>
+              {isEdit ? 'Update' : 'Add Plan Purchase'}
+            </Button>
           </div>
         </form>
       </div>
@@ -134,6 +139,8 @@ const PlanPurchases = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingRow, setEditingRow] = useState(null);
   const [saveError, setSaveError] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [list, setList] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [plans, setPlans] = useState([]);
@@ -165,6 +172,7 @@ const PlanPurchases = () => {
   };
   const handleSave = async (data, id) => {
     setSaveError(null);
+    setSaving(true);
     try {
       if (id) {
         await updatePlanPurchaseInDb(id, data);
@@ -176,10 +184,14 @@ const PlanPurchases = () => {
     } catch (e) {
       console.error('Save plan purchase failed', e);
       setSaveError(e?.message || 'Failed to save');
+    } finally {
+      setSaving(false);
     }
   };
   const handleDelete = async (row) => {
     if (!row?.id) return;
+    if (!window.confirm('Delete this plan purchase?')) return;
+    setDeleting(true);
     try {
       await deletePlanPurchaseFromDb(row.id);
       setOpenActionId(null);
@@ -187,6 +199,8 @@ const PlanPurchases = () => {
       setViewModalRow(null);
     } catch (e) {
       console.error('Delete failed', e);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -196,100 +210,29 @@ const PlanPurchases = () => {
       {isSidebarOpen && (
         <div className="sidebar-overlay" onClick={() => setIsSidebarOpen(false)} />
       )}
-{console.log(plans,customers,'plans')}
       {viewModalRow && (
-        <div style={styles.modalOverlay} onClick={() => setViewModalRow(null)}>
-          <div style={{ ...styles.modalBox, maxWidth: '800px' }} onClick={(e) => e.stopPropagation()}>
-            <div style={styles.modalHeader}>
-              <h2 style={styles.modalTitle}>Detailed Plan Purchase Information</h2>
-              <button type="button" style={styles.modalClose} onClick={() => setViewModalRow(null)} aria-label="Close">
-                <FiX size={24} />
-              </button>
-            </div>
-            <div style={{ padding: '24px', overflowY: 'auto', maxHeight: '75vh' }}>
-              <div style={styles.detailSection}>
-                <h3 style={styles.sectionTitle}>User Profile</h3>
-                <div style={styles.detailGrid}>
-                  <div style={styles.detailItem}><span style={styles.detailLabel}>Name</span><span style={styles.detailValue}>{viewModalRow.name || 'N/A'}</span></div>
-                  <div style={styles.detailItem}><span style={styles.detailLabel}>Customer ID</span><span style={styles.detailValue}>{viewModalRow.cusId || 'N/A'}</span></div>
-                  <div style={styles.detailItem}><span style={styles.detailLabel}>Email</span><span style={styles.detailValue}>{viewModalRow.email || 'N/A'}</span></div>
-                  <div style={styles.detailItem}><span style={styles.detailLabel}>Mobile</span><span style={styles.detailValue}>{viewModalRow.mobile || 'N/A'}</span></div>
-                  <div style={styles.detailItem}><span style={styles.detailLabel}>Address</span><span style={styles.detailValue}>{viewModalRow.address || 'N/A'}</span></div>
-                  <div style={styles.detailItem}><span style={styles.detailLabel}>City</span><span style={styles.detailValue}>{viewModalRow.city || 'N/A'}</span></div>
-                  <div style={styles.detailItem}><span style={styles.detailLabel}>State</span><span style={styles.detailValue}>{viewModalRow.state || 'N/A'}</span></div>
-                  <div style={styles.detailItem}><span style={styles.detailLabel}>Pincode</span><span style={styles.detailValue}>{viewModalRow.pincode || 'N/A'}</span></div>
-                </div>
-              </div>
-
-              <div style={styles.detailSection}>
-                <h3 style={styles.sectionTitle}>Plan & Enrollment</h3>
-                <div style={styles.detailGrid}>
-                  <div style={styles.detailItem}><span style={styles.detailLabel}>Plan Name</span><span style={styles.detailValue}>{viewModalRow.planName || 'N/A'}</span></div>
-                  <div style={styles.detailItem}><span style={styles.detailLabel}>Plan Type</span><span style={styles.detailValue}>{viewModalRow.plan || 'N/A'}</span></div>
-                  <div style={styles.detailItem}><span style={styles.detailLabel}>Joined Date</span><span style={styles.detailValue}>{viewModalRow.joinedDate || 'N/A'}</span></div>
-                  <div style={styles.detailItem}><span style={styles.detailLabel}>Status</span><span style={viewModalRow.status === 'Active' ? styles.badgeActive : styles.badgeInactive}>{viewModalRow.status || 'N/A'}</span></div>
-                  <div style={styles.detailItem}><span style={styles.detailLabel}>Amount</span><span style={styles.detailValue}>₹{viewModalRow.amount || 0}</span></div>
-                  <div style={styles.detailItem}><span style={styles.detailLabel}>Saved Amount</span><span style={styles.detailValue}>₹{viewModalRow.savedAmount || 0}</span></div>
-                  <div style={styles.detailItem}><span style={styles.detailLabel}>Saved Weight</span><span style={styles.detailValue}>{viewModalRow.savedWeight || 0} g</span></div>
-                  <div style={styles.detailItem}><span style={styles.detailLabel}>Paid Installments</span><span style={styles.detailValue}>{viewModalRow.paidInstallments || 0}</span></div>
-                </div>
-              </div>
-
-              <div style={styles.detailSection}>
-                <h3 style={styles.sectionTitle}>Bank & Nominee Details</h3>
-                <div style={styles.detailGrid}>
-                  <div style={styles.detailItem}><span style={styles.detailLabel}>Bank Name</span><span style={styles.detailValue}>{viewModalRow.bankName || 'N/A'}</span></div>
-                  <div style={styles.detailItem}><span style={styles.detailLabel}>Account No</span><span style={styles.detailValue}>{viewModalRow.accountNo || 'N/A'}</span></div>
-                  <div style={styles.detailItem}><span style={styles.detailLabel}>IFSC</span><span style={styles.detailValue}>{viewModalRow.ifsc || 'N/A'}</span></div>
-                  <div style={styles.detailItem}><span style={styles.detailLabel}>Branch</span><span style={styles.detailValue}>{viewModalRow.branch || 'N/A'}</span></div>
-                  <div style={styles.detailItem}><span style={styles.detailLabel}>Nominee Name</span><span style={styles.detailValue}>{viewModalRow.nomineeName || 'N/A'}</span></div>
-                  <div style={styles.detailItem}><span style={styles.detailLabel}>Nominee Relation</span><span style={styles.detailValue}>{viewModalRow.nomineeRelation || 'N/A'}</span></div>
-                </div>
-              </div>
-
-              <div style={styles.detailSection}>
-                <h3 style={styles.sectionTitle}>Documents & Verification</h3>
-                <div style={styles.detailGrid}>
-                  <div style={styles.detailItem}><span style={styles.detailLabel}>Proof Type</span><span style={styles.detailValue}>{viewModalRow.proofType || 'N/A'}</span></div>
-                  <div style={styles.detailItem}><span style={styles.detailLabel}>Proof Number</span><span style={styles.detailValue}>{viewModalRow.proofNo || 'N/A'}</span></div>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '16px' }}>
-                  {viewModalRow.proofFrontUrl && (
-                    <div>
-                      <span style={styles.detailLabel}>Proof (Front)</span>
-                      <img src={viewModalRow.proofFrontUrl} alt="Front Proof" style={styles.proofImage} />
-                    </div>
-                  )}
-                  {viewModalRow.proofBackUrl && (
-                    <div>
-                      <span style={styles.detailLabel}>Proof (Back)</span>
-                      <img src={viewModalRow.proofBackUrl} alt="Back Proof" style={styles.proofImage} />
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <PlanPurchaseDetailModal row={viewModalRow} onClose={() => setViewModalRow(null)} />
       )}
 
       {showAddModal && (
         <AddEditPlanPurchaseModal
-          onClose={() => { setShowAddModal(false); setSaveError(null); }}
+          onClose={() => { if (!saving) { setShowAddModal(false); setSaveError(null); } }}
           onSave={handleSave}
           error={saveError}
           customers={customers}
           plans={plans}
+          saving={saving}
         />
       )}
       {editingRow && (
         <AddEditPlanPurchaseModal
           planPurchase={editingRow}
-          onClose={() => { setEditingRow(null); setSaveError(null); }}
+          onClose={() => { if (!saving) { setEditingRow(null); setSaveError(null); } }}
           onSave={handleSave}
           error={saveError}
           customers={customers}
           plans={plans}
+          saving={saving}
         />
       )}
 
@@ -303,10 +246,6 @@ const PlanPurchases = () => {
           </div>
           <div style={styles.headerActions} className="dashboard-header-actions">
             <button type="button" style={styles.addBtn} onClick={() => setShowAddModal(true)}>+ Add Plan Purchase</button>
-            <div style={styles.searchContainer} className="search-container">
-              <FiSearch style={styles.searchIcon} />
-              <input type="text" placeholder="Search for something..." style={styles.searchInput} />
-            </div>
             <div style={styles.headerIcons}>
               <button style={styles.iconButton}><FiSettings /></button>
               <button style={styles.iconButton}>
@@ -322,17 +261,19 @@ const PlanPurchases = () => {
           isOpen={!!openActionId}
           onClose={() => { setOpenActionId(null); setActionAnchorEl(null); }}
           anchorEl={actionAnchorEl}
+          busy={deleting}
           onView={() => { const row = list.find((r) => r.id === openActionId); if (row) handleView(row); }}
           onEdit={() => { const row = list.find((r) => r.id === openActionId); if (row) handleEdit(row); }}
-          onDelete={() => { const row = list.find((r) => r.id === openActionId); if (row) handleDelete(row); }}
+          onDelete={() => { const row = list.find((r) => r.id === openActionId); if (row) return handleDelete(row); }}
         />
         <ActionMenu
           isOpen={!!openCardActionId}
           onClose={() => { setOpenCardActionId(null); setCardActionAnchorEl(null); }}
           anchorEl={cardActionAnchorEl}
+          busy={deleting}
           onView={() => { const row = list.find((r) => r.id === openCardActionId); if (row) handleView(row); }}
           onEdit={() => { const row = list.find((r) => r.id === openCardActionId); if (row) handleEdit(row); }}
-          onDelete={() => { const row = list.find((r) => r.id === openCardActionId); if (row) handleDelete(row); }}
+          onDelete={() => { const row = list.find((r) => r.id === openCardActionId); if (row) return handleDelete(row); }}
         />
 
         <div style={styles.tableWrap} className="plan-purchases-table-wrap">

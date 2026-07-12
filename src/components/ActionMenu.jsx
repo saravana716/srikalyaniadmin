@@ -8,19 +8,18 @@ const PORTAL_Z_INDEX = 99999;
  * Action dropdown (View, Edit, Delete) rendered in a portal so it appears
  * outside table overflow and above all content. Pass anchorEl (trigger DOM node).
  */
-const ActionMenu = ({ isOpen, onClose, anchorEl, onView, onEdit, onDelete, placement = 'bottom-end' }) => {
+const ActionMenu = ({ isOpen, onClose, anchorEl, onView, onEdit, onDelete, busy = false, placement = 'bottom-end' }) => {
   const menuRef = useRef(null);
   const [position, setPosition] = useState({ top: 0, left: 0 });
 
   useEffect(() => {
     if (!isOpen || !anchorEl) return;
     const handleClickOutside = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target) && anchorEl && !anchorEl.contains(e.target)) {
-        onClose();
-      }
+      if (menuRef.current?.contains(e.target) || anchorEl?.contains(e.target)) return;
+      onClose();
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('click', handleClickOutside, true);
+    return () => document.removeEventListener('click', handleClickOutside, true);
   }, [isOpen, onClose, anchorEl]);
 
   useEffect(() => {
@@ -60,9 +59,25 @@ const ActionMenu = ({ isOpen, onClose, anchorEl, onView, onEdit, onDelete, place
         flexDirection: 'column',
       }}
     >
-      <button type="button" className="action-dropdown-item" onClick={() => { onView(); onClose(); }}>View</button>
-      <button type="button" className="action-dropdown-item" onClick={() => { onEdit(); onClose(); }}>Edit</button>
-      <button type="button" className="action-dropdown-item" onClick={() => { onDelete(); onClose(); }}>Delete</button>
+      <button type="button" className="action-dropdown-item" disabled={busy} onMouseDown={(e) => e.preventDefault()} onClick={() => { if (busy) return; onView?.(); onClose(); }}>View</button>
+      <button type="button" className="action-dropdown-item" disabled={busy} onMouseDown={(e) => e.preventDefault()} onClick={() => { if (busy) return; onEdit?.(); onClose(); }}>Edit</button>
+      <button
+        type="button"
+        className={`action-dropdown-item${busy ? ' action-dropdown-item--loading' : ''}`}
+        disabled={busy}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={async () => {
+          if (busy) return;
+          try {
+            await onDelete?.();
+          } finally {
+            onClose();
+          }
+        }}
+      >
+        {busy && <span className="app-btn-spinner" style={{ width: 14, height: 14, borderWidth: 2 }} aria-hidden="true" />}
+        {busy ? 'Deleting…' : 'Delete'}
+      </button>
     </div>
   );
 

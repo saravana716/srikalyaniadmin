@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
 import ActionMenu from '../components/ActionMenu';
-import { FiSearch, FiSettings, FiBell, FiMenu, FiX } from 'react-icons/fi';
+import Button from '../components/Button';
+import { FiSettings, FiBell, FiMenu, FiX } from 'react-icons/fi';
 import { MdKeyboardArrowUp, MdKeyboardArrowDown, MdMonetizationOn, MdCalendarToday, MdBuild } from 'react-icons/md';
 import { subscribeCustomers } from '../services/customersService';
 import { subscribeInstallments, addInstallment as addInstallmentToDb, updateInstallment as updateInstallmentInDb, deleteInstallment as deleteInstallmentFromDb } from '../services/installmentsService';
@@ -84,7 +85,7 @@ const InstallmentViewModal = ({ row, onClose, onCancel, onDownload, onSend, onEd
   );
 };
 
-const AddEditInstallmentModal = ({ installment, onClose, onSave, error }) => {
+const AddEditInstallmentModal = ({ installment, onClose, onSave, error, saving }) => {
   const isEdit = !!installment;
   const [installmentNo, setInstallmentNo] = useState(installment?.installmentNo ?? '');
   const [dueDate, setDueDate] = useState(installment?.dueDate ?? '');
@@ -93,9 +94,10 @@ const AddEditInstallmentModal = ({ installment, onClose, onSave, error }) => {
   const [mode, setMode] = useState(installment?.mode ?? 'Cash');
   const [status, setStatus] = useState(installment?.status ?? 'Pending');
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    onSave({ installmentNo, dueDate, paidDate, amount, mode, status }, installment?.id);
+    if (saving) return;
+    await onSave({ installmentNo, dueDate, paidDate, amount, mode, status }, installment?.id);
   };
 
   return (
@@ -144,8 +146,10 @@ const AddEditInstallmentModal = ({ installment, onClose, onSave, error }) => {
             </select>
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 20 }}>
-            <button type="button" style={styles.modalBtnCancel} onClick={onClose}>Cancel</button>
-            <button type="submit" style={styles.modalBtnPrimary}>{isEdit ? 'Update' : 'Add Installment'}</button>
+            <Button type="button" variant="secondary" onClick={onClose} disabled={saving} style={styles.modalBtnCancel}>Cancel</Button>
+            <Button type="submit" loading={saving} loadingText={isEdit ? 'Updating…' : 'Adding…'} style={styles.modalBtnPrimary}>
+              {isEdit ? 'Update' : 'Add Installment'}
+            </Button>
           </div>
         </form>
       </div>
@@ -163,6 +167,8 @@ const Installments = () => {
   const [showAddInstallmentModal, setShowAddInstallmentModal] = useState(false);
   const [editingInstallment, setEditingInstallment] = useState(null);
   const [saveError, setSaveError] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [openActionId, setOpenActionId] = useState(null);
   const [actionAnchorEl, setActionAnchorEl] = useState(null);
 
@@ -183,6 +189,7 @@ const Installments = () => {
 
   const handleSaveInstallment = async (data, id) => {
     setSaveError(null);
+    setSaving(true);
     try {
       if (id) {
         await updateInstallmentInDb(id, data);
@@ -194,16 +201,22 @@ const Installments = () => {
     } catch (e) {
       console.error('Save installment failed', e);
       setSaveError(e?.message || 'Failed to save installment');
+    } finally {
+      setSaving(false);
     }
   };
   const handleDeleteInstallment = async (row) => {
     if (!row?.id) return;
+    if (!window.confirm('Delete this installment?')) return;
+    setDeleting(true);
     try {
       await deleteInstallmentFromDb(row.id);
       setOpenActionId(null);
       setViewModalRow(null);
     } catch (e) {
       console.error('Delete installment failed', e);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -226,17 +239,19 @@ const Installments = () => {
       )}
       {showAddInstallmentModal && (
         <AddEditInstallmentModal
-          onClose={() => { setShowAddInstallmentModal(false); setSaveError(null); }}
+          onClose={() => { if (!saving) { setShowAddInstallmentModal(false); setSaveError(null); } }}
           onSave={handleSaveInstallment}
           error={saveError}
+          saving={saving}
         />
       )}
       {editingInstallment && (
         <AddEditInstallmentModal
           installment={editingInstallment}
-          onClose={() => { setEditingInstallment(null); setSaveError(null); }}
+          onClose={() => { if (!saving) { setEditingInstallment(null); setSaveError(null); } }}
           onSave={handleSaveInstallment}
           error={saveError}
+          saving={saving}
         />
       )}
 
@@ -250,10 +265,6 @@ const Installments = () => {
           </div>
           <div style={styles.headerActions} className="dashboard-header-actions">
             <button type="button" style={styles.addInstallmentBtn} onClick={() => setShowAddInstallmentModal(true)}>+ Add Installment</button>
-            <div style={styles.searchContainer} className="search-container">
-              <FiSearch style={styles.searchIcon} />
-              <input type="text" placeholder="Search for something..." style={styles.searchInput} />
-            </div>
             <div style={styles.headerIcons}>
               <button style={styles.iconButton}><FiSettings /></button>
               <button style={styles.iconButton}>
@@ -329,9 +340,10 @@ const Installments = () => {
             isOpen={!!openActionId}
             onClose={() => { setOpenActionId(null); setActionAnchorEl(null); }}
             anchorEl={actionAnchorEl}
+            busy={deleting}
             onView={() => { const row = installments.find((r) => r.id === openActionId); if (row) setViewModalRow(row); setOpenActionId(null); }}
             onEdit={() => { const row = installments.find((r) => r.id === openActionId); if (row) { setOpenActionId(null); setEditingInstallment(row); } }}
-            onDelete={() => { const row = installments.find((r) => r.id === openActionId); if (row) handleDeleteInstallment(row); }}
+            onDelete={() => { const row = installments.find((r) => r.id === openActionId); if (row) return handleDeleteInstallment(row); }}
           />
           {loadingInstallments && <p style={{ marginBottom: 16, color: '#666' }}>Loading installments…</p>}
           <div style={styles.tableWrap} className="installments-history-table-wrap">

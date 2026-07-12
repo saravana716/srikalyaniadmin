@@ -1,20 +1,40 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
-import { FiSearch, FiSettings, FiBell, FiMenu, FiArrowRight } from 'react-icons/fi';
+import { FiSettings, FiBell, FiMenu, FiArrowRight } from 'react-icons/fi';
 import { MdDescription, MdBarChart, MdList, MdPeople } from 'react-icons/md';
+import { subscribeCustomers } from '../services/customersService';
+import { subscribePlans } from '../services/plansService';
+import { subscribePayments } from '../services/paymentsService';
+import { parseAmount, formatINR } from '../utils/currencyUtils';
 
 const MAROON = '#801A39';
 const LIGHT_GRAY = '#F0F0F0';
 
-const reportCards = [
-  { id: 1, title: 'Monthly Collection Report', subtitle: 'Track Total Collection Month wise', icon: MdDescription, gradient: 'linear-gradient(135deg, #f59e0b 0%, #dc2626 100%)' },
-  { id: 2, title: 'Customer-wise Report', subtitle: 'Collection and Status Per Customer', icon: MdBarChart, gradient: 'linear-gradient(135deg, #f97316 0%, #e11d48 100%)' },
-  { id: 3, title: 'Chit Plan Performance', subtitle: 'Plan growth and Rate', icon: MdList, gradient: 'linear-gradient(135deg, #ea580c 0%, #be123c 100%)', badge: 'Active Plans: 24' },
-  { id: 4, title: 'Agent-wise Commission', subtitle: 'Commission Breakdown by Agent', icon: MdPeople, gradient: 'linear-gradient(135deg, #dc2626 0%, #9f1239 100%)' },
-];
-
 const Reports = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [customers, setCustomers] = useState([]);
+  const [plans, setPlans] = useState([]);
+  const [payments, setPayments] = useState([]);
+
+  useEffect(() => {
+    const unsubs = [
+      subscribeCustomers(setCustomers),
+      subscribePlans(setPlans),
+      subscribePayments(setPayments),
+    ];
+    return () => unsubs.forEach((fn) => fn());
+  }, []);
+
+  const activePlans = plans.filter((p) => p.status === 'Active').length;
+  const paidPayments = payments.filter((p) => p.status === 'Paid');
+  const totalPaidAmount = paidPayments.reduce((s, p) => s + parseAmount(p.paidAmount), 0);
+
+  const reportCards = [
+    { id: 1, title: 'Monthly Collection Report', subtitle: `${payments.length} payment records in system`, icon: MdDescription, gradient: 'linear-gradient(135deg, #f59e0b 0%, #dc2626 100%)' },
+    { id: 2, title: 'Customer-wise Report', subtitle: `${customers.length} customers registered`, icon: MdBarChart, gradient: 'linear-gradient(135deg, #f97316 0%, #e11d48 100%)' },
+    { id: 3, title: 'Chit Plan Performance', subtitle: 'Plan growth and Rate', icon: MdList, gradient: 'linear-gradient(135deg, #ea580c 0%, #be123c 100%)', badge: `Active Plans: ${activePlans}` },
+    { id: 4, title: 'Payment Summary', subtitle: `${paidPayments.length} paid · ${formatINR(totalPaidAmount)} collected`, icon: MdPeople, gradient: 'linear-gradient(135deg, #dc2626 0%, #9f1239 100%)' },
+  ];
 
   return (
     <div style={styles.container} className="dashboard-container reports-page">
@@ -32,17 +52,10 @@ const Reports = () => {
             <h1 style={styles.pageTitle}>Reports</h1>
           </div>
           <div style={styles.headerActions} className="dashboard-header-actions">
-            <div style={styles.searchContainer} className="search-container">
-              <FiSearch style={styles.searchIcon} />
-              <input type="text" placeholder="Search for something..." style={styles.searchInput} />
-            </div>
             <div style={styles.headerIcons}>
               <button style={styles.iconButton}><FiSettings /></button>
-              <button style={styles.iconButton}>
-                <span style={styles.notifBadge}>1</span>
-                <FiBell />
-              </button>
-              <img src="https://ui-avatars.com/api/?name=User&background=random" alt="Profile" style={styles.avatar} />
+              <button style={styles.iconButton}><FiBell /></button>
+              <img src="https://ui-avatars.com/api/?name=Reports&background=801A39&color=fff" alt="Profile" style={styles.avatar} />
             </div>
           </div>
         </header>
@@ -62,9 +75,9 @@ const Reports = () => {
                 </div>
                 <h3 style={styles.cardTitle}>{card.title}</h3>
                 <p style={styles.cardSubtitle}>{card.subtitle}</p>
-                <a href="#view" style={styles.viewReport}>
-                  View Report <FiArrowRight size={16} />
-                </a>
+                <span style={styles.viewReport}>
+                  Live data from Firestore <FiArrowRight size={16} />
+                </span>
               </div>
             );
           })}
@@ -86,7 +99,6 @@ const styles = {
   searchInput: { border: 'none', background: 'transparent', outline: 'none', fontSize: '14px', width: '100%', color: '#333' },
   headerIcons: { display: 'flex', alignItems: 'center', gap: '10px' },
   iconButton: { width: '40px', height: '40px', borderRadius: '50%', backgroundColor: LIGHT_GRAY, border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#666', fontSize: '18px', position: 'relative' },
-  notifBadge: { position: 'absolute', top: '6px', right: '8px', minWidth: '16px', height: '16px', borderRadius: '50%', backgroundColor: '#ff4444', color: '#fff', fontSize: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' },
   avatar: { width: '45px', height: '45px', borderRadius: '50%', objectFit: 'cover', boxShadow: '0 2px 5px rgba(0,0,0,0.1)' },
 
   cardsGrid: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '20px' },
@@ -96,7 +108,7 @@ const styles = {
   badge: { padding: '4px 10px', borderRadius: '6px', backgroundColor: '#22c55e', color: '#fff', fontSize: '12px', fontWeight: '600' },
   cardTitle: { fontSize: '18px', fontWeight: '700', margin: 0 },
   cardSubtitle: { fontSize: '14px', opacity: 0.95, margin: 0, flex: 1 },
-  viewReport: { display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '14px', fontWeight: '500', color: '#fff', textDecoration: 'none', marginTop: 'auto', alignSelf: 'flex-start' },
+  viewReport: { display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '14px', fontWeight: '500', color: '#fff', marginTop: 'auto', alignSelf: 'flex-start' },
   hamburger: { background: 'none', border: 'none', cursor: 'pointer', display: 'none', padding: 0 },
 };
 

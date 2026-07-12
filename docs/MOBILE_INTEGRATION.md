@@ -213,6 +213,66 @@ await addDoc(collection(db, 'planPurchases'), {
 
 ---
 
+### 2.7 `admin` (Admin login)
+
+| Field     | Type   | Required | Description                    |
+|-----------|--------|----------|--------------------------------|
+| Email     | string | Yes      | Admin email (e.g. admin@gmail.com) |
+| Password  | string | Yes      | Login password                 |
+| Name      | string | No       | Display name                   |
+| createdAt | timestamp | Auto  | Set on create (web Add Admin)  |
+
+**Your existing admin document** in Firestore `admin` collection works as-is with `Email` and `Password` fields.
+
+Web login (`src/pages/Login.jsx`) queries `where('Email', '==', email)` and checks `Password`.  
+Manage admins at **Admin Accounts** page (`/admin-accounts`) — add, edit, delete accounts.
+
+---
+
+### 2.8 `products`
+
+| Field       | Type   | Required | Description                          |
+|-------------|--------|----------|--------------------------------------|
+| name        | string | Yes      | Product name                         |
+| category    | string | Yes      | "Gold" \| "Silver" \| "Diamond" etc. |
+| price       | string | Yes      | e.g. "₹25,000"                       |
+| weight      | string | No       | e.g. "10g"                           |
+| purity      | string | No       | e.g. "22K"                           |
+| status      | string | Yes      | "Active" \| "Inactive"               |
+| description | string | No       | Optional details                     |
+| createdAt   | timestamp | Auto  | Set on create                        |
+| updatedAt   | timestamp | Auto  | Set on update                        |
+
+---
+
+### 2.9 `offers`
+
+| Field       | Type   | Required | Description                    |
+|-------------|--------|----------|--------------------------------|
+| title       | string | Yes      | Offer title                    |
+| discount    | string | Yes      | e.g. "10%" or "₹5000 off"      |
+| validFrom   | string | Yes      | Date "YYYY-MM-DD"              |
+| validTo     | string | Yes      | Date "YYYY-MM-DD"              |
+| description | string | No       | Optional details               |
+| status      | string | Yes      | "Active" \| "Inactive" \| "Expired" |
+| createdAt   | timestamp | Auto  | Set on create                  |
+| updatedAt   | timestamp | Auto  | Set on update                  |
+
+---
+
+### 2.10 `app_notifications`
+
+| Field     | Type   | Required | Description              |
+|-----------|--------|----------|--------------------------|
+| title     | string | Yes      | Notification title       |
+| message   | string | No       | Body text                |
+| read      | boolean| No       | Read status              |
+| createdAt | timestamp | Auto  | Set on create            |
+
+Used on Dashboard for notification badge count.
+
+---
+
 ## 3. How Data Flows
 
 1. **Mobile app** (or any client) writes to Firestore using the same collection names and field schemas above.
@@ -231,6 +291,9 @@ The web app uses `orderBy('createdAt', 'desc')` on:
 - `goldRates`
 - `installments`
 - `planPurchases`
+- `products`
+- `offers`
+- `app_notifications`
 
 On first run, if an index is missing, Firestore will log an error with a **link to create the index** in the Firebase Console. Open that link and create the index once per collection (and composite indexes if you add more `where` + `orderBy` later).
 
@@ -242,6 +305,9 @@ Alternatively, in Firebase Console → Firestore → Indexes, add:
 - Collection: `goldRates`      → Field: `createdAt` → Descending
 - Collection: `installments`   → Field: `createdAt` → Descending
 - Collection: `planPurchases`  → Field: `createdAt` → Descending
+- Collection: `products`       → Field: `createdAt` → Descending
+- Collection: `offers`         → Field: `createdAt` → Descending
+- Collection: `app_notifications` → Field: `createdAt` → Descending
 
 ---
 
@@ -272,6 +338,21 @@ service cloud.firestore {
       allow read, write: if true;
     }
     match /planPurchases/{docId} {
+      allow read, write: if true;
+    }
+    match /admin/{docId} {
+      allow read, write: if true;
+    }
+    match /products/{docId} {
+      allow read, write: if true;
+    }
+    match /offers/{docId} {
+      allow read, write: if true;
+    }
+    match /app_notifications/{docId} {
+      allow read, write: if true;
+    }
+    match /transactions/{docId} {
       allow read, write: if true;
     }
   }
@@ -320,6 +401,11 @@ Use **Option A** until login is wired to Firebase Auth; then use **Option B** an
 | Payment          | `services/paymentsService.js` | `payments`     | ✓ Add  | ✓ View more | ✓ Edit | ✓ |
 | Installments     | `services/installmentsService.js` | `installments` | ✓ Add | ✓ View more | ✓ Edit | ✓ |
 | Gold Rate Manage | `services/goldRatesService.js` | `goldRates`    | ✓ Add  | ✓ List / Display card | — | — |
+| Products         | `services/productsService.js`  | `products`     | ✓ Add  | ✓ List | ✓ Edit | ✓ |
+| Offers           | `services/offersService.js`    | `offers`       | ✓ Add  | ✓ List | ✓ Edit | ✓ |
+| Login            | `services/authService.js`      | `admin`        | —      | ✓ Login query | — | — |
+| Admin Accounts   | `services/adminService.js`     | `admin`        | ✓ Add  | ✓ List | ✓ Edit | ✓ |
+| Notifications    | `services/notificationsService.js` | `app_notifications` | — | ✓ Badge count | — | — |
 
 - **Create**: Add modal or form; writes to Firestore via `addDoc` (or service `add*`).
 - **View**: List from real-time `onSnapshot`; “View more” / View modal shows one document.
@@ -346,8 +432,8 @@ Request/response formats are documented in [Firestore REST API](https://firebase
 ## 8. Summary
 
 - Use the **same Firebase config** in web and mobile.
-- Write to **customers**, **plans**, **planPurchases**, **payments**, **installments**, **goldRates** with the **field schemas** above.
-- Web dashboard: all pages support **Create, View, Edit, Delete** (except Gold Rate: Create + View only).
+- Write to **customers**, **plans**, **planPurchases**, **payments**, **installments**, **goldRates**, **products**, **offers**, **admin**, **app_notifications** with the **field schemas** above.
+- Web dashboard: all pages support **Create, View, Edit, Delete** (except Gold Rate: Create + View only). Login uses **Email + Password** against `admin` collection.
 - Web stays in sync via **onSnapshot**; mobile data appears in real time.
 - Create **indexes** when prompted (or from Firestore Console) for each collection.
 - Add **security rules** and (recommended) **Firebase Auth** before production.

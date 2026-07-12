@@ -1,40 +1,64 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { FiUser, FiLock } from 'react-icons/fi';
+import { useNavigate, Navigate } from 'react-router-dom';
+import { FiMail, FiLock } from 'react-icons/fi';
+import { useAuth } from '../context/AuthContext';
+import Button from '../components/Button';
 import loginBg from '../assets/login_bg.png';
 
 const Login = () => {
     const navigate = useNavigate();
-    const [username, setUsername] = useState('');
+    const { login, isAuthenticated, loading } = useAuth();
+    const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [error, setError] = useState('');
+    const [submitting, setSubmitting] = useState(false);
 
-    const handleLogin = (e) => {
+    if (loading) return null;
+    if (isAuthenticated) return <Navigate to="/dashboard" replace />;
+
+    const handleLogin = async (e) => {
         e.preventDefault();
-        navigate('/dashboard');
+        setError('');
+        setSubmitting(true);
+        try {
+            await login(email, password);
+            navigate('/dashboard');
+        } catch (err) {
+            setError(err?.message || 'Login failed');
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     return (
         <div style={styles.container} className="login-container">
             <div style={styles.contentWrapper} className="login-content-wrapper">
-                {/* Left Side (Spacer for the diamond background visual) */}
                 <div style={styles.leftSpacer} className="login-left-spacer"></div>
 
-                {/* Right Form Side */}
                 <div style={styles.formSection} className="login-form-section">
                     <div style={styles.formContainer} className="login-form-container">
-                        <h1 style={styles.logoText}>Jewellery Logo</h1>
-
+                        <div style={styles.brandBlock}>
+                            <div style={styles.logoCircle}>
+                                <span style={{ fontSize: '28px' }}>♛</span>
+                            </div>
+                            <h1 style={styles.logoText}>SRI KALYANI JEWELLERY</h1>
+                            <p style={styles.logoTagline}>Authentic Gold & Diamond</p>
+                        </div>
                         <h2 style={styles.welcomeText}>WELCOME ADMIN</h2>
 
                         <form onSubmit={handleLogin} style={styles.form}>
+                            {error && <p style={styles.errorText}>{error}</p>}
+
                             <div style={styles.inputGroup} className="login-input-group">
-                                <FiUser style={styles.icon} />
+                                <FiMail style={styles.icon} />
                                 <input
-                                    type="text"
-                                    placeholder="Enter your username"
+                                    type="email"
+                                    placeholder="Enter your email"
                                     style={styles.input}
-                                    value={username}
-                                    onChange={(e) => setUsername(e.target.value)}
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    required
+                                    autoComplete="email"
                                 />
                             </div>
 
@@ -46,12 +70,21 @@ const Login = () => {
                                     style={styles.input}
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
+                                    required
+                                    autoComplete="current-password"
                                 />
                             </div>
 
-                            <button type="submit" style={styles.button}>
+                            <Button
+                                type="submit"
+                                variant="login"
+                                fullWidth
+                                loading={submitting}
+                                loadingText="Logging in…"
+                                style={styles.button}
+                            >
                                 LOGIN
-                            </button>
+                            </Button>
                         </form>
                     </div>
                 </div>
@@ -79,7 +112,6 @@ const styles = {
     },
     leftSpacer: {
         flex: 1,
-        // This side is empty to let the background diamonds show through
     },
     formSection: {
         flex: 1,
@@ -94,11 +126,35 @@ const styles = {
         textAlign: 'center',
         padding: '2rem',
     },
-    logoText: {
-        color: '#3f1d1d', // Dark brown
-        fontSize: '2rem',
-        fontWeight: '700',
+    brandBlock: {
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
         marginBottom: '2rem',
+    },
+    logoCircle: {
+        width: '56px',
+        height: '56px',
+        borderRadius: '50%',
+        backgroundColor: '#801A39',
+        color: 'gold',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: '12px',
+    },
+    logoText: {
+        color: '#3f1d1d',
+        fontSize: '1.35rem',
+        fontWeight: '700',
+        margin: 0,
+        letterSpacing: '0.5px',
+        lineHeight: 1.3,
+    },
+    logoTagline: {
+        color: '#666',
+        fontSize: '0.85rem',
+        margin: '6px 0 0',
     },
     welcomeText: {
         color: '#3f1d1d',
@@ -111,6 +167,12 @@ const styles = {
         display: 'flex',
         flexDirection: 'column',
         gap: '1.5rem',
+    },
+    errorText: {
+        color: '#dc2626',
+        fontSize: '0.9rem',
+        margin: 0,
+        textAlign: 'left',
     },
     inputGroup: {
         position: 'relative',
@@ -128,7 +190,7 @@ const styles = {
         padding: '12px 12px 12px 40px',
         borderRadius: '8px',
         border: 'none',
-        backgroundColor: '#dcdcdc', // Light gray input background
+        backgroundColor: '#dcdcdc',
         fontSize: '0.9rem',
         outline: 'none',
         color: '#333',
@@ -136,7 +198,7 @@ const styles = {
     button: {
         marginTop: '1rem',
         padding: '12px',
-        backgroundColor: '#5c202a', // Dark burgundy/brown
+        backgroundColor: '#5c202a',
         color: 'white',
         border: 'none',
         borderRadius: '8px',

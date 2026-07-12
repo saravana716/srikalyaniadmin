@@ -1,5 +1,7 @@
-import React from 'react';
-import { NavLink } from 'react-router-dom';
+import React, { useState } from 'react';
+import { NavLink, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import Button from './Button';
 import {
     MdDashboard,
     MdPeople,
@@ -10,10 +12,17 @@ import {
     MdDescription,
     MdSettings,
     MdClose,
-    MdLogout
+    MdLogout,
+    MdInventory2,
+    MdLocalOffer,
+    MdAdminPanelSettings,
 } from 'react-icons/md';
 
 const Sidebar = ({ isOpen, onClose }) => {
+    const navigate = useNavigate();
+    const { logout, user } = useAuth();
+    const [loggingOut, setLoggingOut] = useState(false);
+
     const menuItems = [
         { name: 'Dashboard', icon: <MdDashboard />, path: '/dashboard' },
         { name: 'Customers', icon: <MdPeople />, path: '/customers' },
@@ -21,14 +30,28 @@ const Sidebar = ({ isOpen, onClose }) => {
         { name: 'Plan Purchases', icon: <MdAssignment />, path: '/plan-purchases' },
         { name: 'Payment', icon: <MdPayment />, path: '/payment' },
         { name: 'Installments', icon: <MdSchedule />, path: '/installments' },
+        { name: 'Products', icon: <MdInventory2 />, path: '/products' },
+        { name: 'Offers', icon: <MdLocalOffer />, path: '/offers' },
         { name: 'Gold Rate Manage', icon: <MdTrendingUp />, path: '/gold-rate' },
         { name: 'Reports', icon: <MdDescription />, path: '/reports' },
+        { name: 'Admin Accounts', icon: <MdAdminPanelSettings />, path: '/admin-accounts' },
         { name: 'Settings', icon: <MdSettings />, path: '/settings' },
     ];
 
+    const handleLogout = async () => {
+        if (loggingOut) return;
+        setLoggingOut(true);
+        try {
+            logout();
+            onClose?.();
+            navigate('/login');
+        } finally {
+            setLoggingOut(false);
+        }
+    };
+
     return (
         <div className={`sidebar ${isOpen ? 'open' : ''}`} style={styles.sidebar}>
-            {/* Mobile Close Button */}
             <button
                 style={styles.closeButton}
                 className="sidebar-close-btn"
@@ -66,10 +89,20 @@ const Sidebar = ({ isOpen, onClose }) => {
             </nav>
 
             <div style={styles.logoutWrap}>
-                <NavLink to="/login" style={styles.logoutLink} onClick={onClose}>
-                    <MdLogout style={styles.logoutIcon} />
+                {user?.email && (
+                    <div style={styles.userEmail}>{user.name || user.email}</div>
+                )}
+                <Button
+                    type="button"
+                    variant="secondary"
+                    loading={loggingOut}
+                    loadingText="Logging out…"
+                    onClick={handleLogout}
+                    style={{ ...styles.logoutLink, width: '100%', justifyContent: 'flex-start' }}
+                >
+                    {!loggingOut && <MdLogout style={styles.logoutIcon} />}
                     Logout
-                </NavLink>
+                </Button>
             </div>
         </div>
     );
@@ -128,6 +161,7 @@ const styles = {
         flexDirection: 'column',
         padding: '0 12px',
         flex: 1,
+        overflowY: 'auto',
     },
     link: {
         display: 'flex',
@@ -154,16 +188,25 @@ const styles = {
         padding: '16px 12px 24px',
         borderTop: '1px solid #eee',
     },
+    userEmail: {
+        fontSize: '12px',
+        color: '#666',
+        padding: '0 16px 8px',
+        wordBreak: 'break-all',
+    },
     logoutLink: {
         display: 'flex',
         alignItems: 'center',
+        width: '100%',
         padding: '12px 16px',
         color: '#333',
-        textDecoration: 'none',
         fontSize: '15px',
         fontWeight: '500',
         borderRadius: '8px',
-        transition: 'all 0.2s',
+        border: 'none',
+        background: 'none',
+        cursor: 'pointer',
+        textAlign: 'left',
     },
     logoutIcon: {
         marginRight: '12px',

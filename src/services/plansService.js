@@ -5,67 +5,96 @@ import {
   updateDoc,
   deleteDoc,
   onSnapshot,
-  query,
-  orderBy,
+  getDocsFromServer,
   serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 
 const COLLECTION = 'plans';
 
-/**
- * Subscribe to plans list (real-time). Returns unsubscribe function.
- * @param {(data: Array<{ id: string, ... }>) => void} setData
- * @returns {() => void} unsubscribe
- */
-export function subscribePlans(setData) {
-  const q = query(
-    collection(db, COLLECTION),
-    orderBy('createdAt', 'desc')
-  );
-  return onSnapshot(q, (snapshot) => {
-    const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-    setData(list);
-  }, (err) => {
-    console.error('plans subscribe error', err);
-    setData([]);
+function tsMillis(ts) {
+  if (!ts) return 0;
+  if (typeof ts.toMillis === 'function') return ts.toMillis();
+  if (typeof ts.seconds === 'number') return ts.seconds * 1000;
+  return 0;
+}
+
+/** Map Firestore doc — primary fields: name, type, description (mobile app schema). */
+function normalizePlan(docSnap) {
+  const d = docSnap.data();
+  const name = d.name ?? d.Name ?? d.planName ?? d.PlanName ?? '';
+  const type = d.type ?? d.Type ?? d.plan ?? d.Plan ?? '';
+  const description = d.description ?? d.Description ?? '';
+  return {
+    id: docSnap.id,
+    name,
+    type,
+    description,
+    planName: name,
+    plan: type,
+    status: d.status ?? d.Status ?? 'Active',
+    createdAt: d.createdAt ?? null,
+    updatedAt: d.updatedAt ?? null,
+  };
+}
+
+function sortPlans(list) {
+  return [...list].sort((a, b) => {
+    const at = tsMillis(a.updatedAt) || tsMillis(a.createdAt);
+    const bt = tsMillis(b.updatedAt) || tsMillis(b.createdAt);
+    if (bt !== at) return bt - at;
+    return (a.name || '').localeCompare(b.name || '');
   });
 }
 
+function mapSnapshot(snapshot) {
+  return sortPlans(snapshot.docs.map(normalizePlan));
+}
+
 /**
- * Add a plan.
- * @param {{ planName: string, monthlyAmount: string, durationMonths: string, totalValue: string, bonus: string, status: string }} data
- * @returns {Promise<{ id: string }>}
+ * Subscribe to plans (real-time). Fetches from server first to avoid stale empty cache.
  */
+export function subscribePlans(setData, onError) {
+  getDocsFromServer(collection(db, COLLECTION))
+    .then((snap) => setData(mapSnapshot(snap)))
+    .catch((err) => {
+      console.error('plans initial fetch error', err);
+      onError?.(err);
+    });
+
+  return onSnapshot(
+    collection(db, COLLECTION),
+    (snapshot) => {
+      setData(mapSnapshot(snapshot));
+    },
+    (err) => {
+      console.error('plans subscribe error', err);
+      onError?.(err);
+      setData([]);
+    }
+  );
+}
+
 export async function addPlan(data) {
   const ref = await addDoc(collection(db, COLLECTION), {
-    planName: data.planName,
-    monthlyAmount: data.monthlyAmount,
-    durationMonths: data.durationMonths,
-    totalValue: data.totalValue,
-    bonus: data.bonus,
-    status: data.status || 'Active',
+    name: data.name,
+    type: data.type,
+    description: data.description || '',
     createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
   });
   return { id: ref.id };
 }
 
-/**
- * Update a plan by id.
- * @param {string} id
- * @param {Partial<{ planName, monthlyAmount, durationMonths, totalValue, bonus, status }>} data
- */
 export async function updatePlan(id, data) {
   await updateDoc(doc(db, COLLECTION, id), {
-    ...data,
+    name: data.name,
+    type: data.type,
+    description: data.description || '',
     updatedAt: serverTimestamp(),
   });
 }
 
-/**
- * Delete a plan by id.
- * @param {string} id
- */
 export async function deletePlan(id) {
   await deleteDoc(doc(db, COLLECTION, id));
 }

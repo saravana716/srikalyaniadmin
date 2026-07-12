@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
-import { FiSearch, FiSettings, FiBell, FiMenu } from 'react-icons/fi';
+import Button from '../components/Button';
+import { FiSettings, FiBell, FiMenu } from 'react-icons/fi';
 import { MdKeyboardArrowUp, MdKeyboardArrowDown, MdTrendingUp, MdTrendingDown } from 'react-icons/md';
 import { subscribeGoldRates, addGoldRate as addGoldRateToDb } from '../services/goldRatesService';
 
@@ -26,6 +27,7 @@ const GoldRateManage = () => {
   const [goldRateInput, setGoldRateInput] = useState('');
   const [silverRateInput, setSilverRateInput] = useState('');
   const [addError, setAddError] = useState(null);
+  const [adding, setAdding] = useState(false);
   const totalPages = Math.max(1, Math.ceil(goldRates.length / 10));
 
   useEffect(() => {
@@ -39,8 +41,10 @@ const GoldRateManage = () => {
   const latest = goldRates[0];
   const handleAdd = async (e) => {
     e.preventDefault();
+    if (adding) return;
     setAddError(null);
     const d = date || new Date().toISOString().slice(0, 10);
+    setAdding(true);
     try {
       await addGoldRateToDb({ date: d, goldRate: goldRateInput, silverRate: silverRateInput });
       setDate('');
@@ -49,6 +53,8 @@ const GoldRateManage = () => {
     } catch (err) {
       console.error('Add gold rate failed', err);
       setAddError(err?.message || 'Failed to add rate');
+    } finally {
+      setAdding(false);
     }
   };
 
@@ -68,10 +74,6 @@ const GoldRateManage = () => {
             <h1 style={styles.pageTitle}>Gold Rate Manage</h1>
           </div>
           <div style={styles.headerActions} className="dashboard-header-actions">
-            <div style={styles.searchContainer} className="search-container">
-              <FiSearch style={styles.searchIcon} />
-              <input type="text" placeholder="Search for something..." style={styles.searchInput} />
-            </div>
             <div style={styles.headerIcons}>
               <button style={styles.iconButton}><FiSettings /></button>
               <button style={styles.iconButton}>
@@ -101,7 +103,7 @@ const GoldRateManage = () => {
                 <label style={styles.inputLabel}>Enter Silver Rate</label>
                 <input type="text" placeholder="Enter Silver Rate" style={styles.input} value={silverRateInput} onChange={(e) => setSilverRateInput(e.target.value)} />
               </div>
-              <button type="submit" style={styles.addBtn}>Add</button>
+              <Button type="submit" loading={adding} loadingText="Adding…" style={styles.addBtn}>Add</Button>
             </form>
           </div>
 

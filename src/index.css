@@ -58,6 +58,39 @@ a {
 .action-dropdown-item:hover {
   background-color: #f0f0f0;
 }
+.action-dropdown-item:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.action-dropdown-item--loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* App button spinner */
+@keyframes app-btn-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.app-btn-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: app-btn-spin 0.65s linear infinite;
+  flex-shrink: 0;
+}
+.app-btn--loading .app-btn-spinner {
+  border-color: rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+}
+.app-btn--secondary .app-btn-spinner {
+  border-color: rgba(128, 26, 57, 0.2);
+  border-top-color: #801A39;
+}
 
 /* Right-side View more panel (Chit Fund Plans) */
 @keyframes slideInRight {

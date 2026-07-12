@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
 import ActionMenu from '../components/ActionMenu';
-import { FiSearch, FiSettings, FiBell, FiMenu, FiX } from 'react-icons/fi';
+import Button from '../components/Button';
+import { FiSettings, FiBell, FiMenu, FiX } from 'react-icons/fi';
 import { MdKeyboardArrowUp, MdKeyboardArrowDown } from 'react-icons/md';
 import { subscribePayments, addPayment as addPaymentToDb, updatePayment as updatePaymentInDb, deletePayment as deletePaymentFromDb } from '../services/paymentsService';
 
@@ -9,7 +10,7 @@ const MAROON = '#801A39';
 const LIGHT_GRAY = '#F0F0F0';
 const BORDER_GRAY = '#e0e0e0';
 
-const AddEditPaymentModal = ({ payment, onClose, onSave, error }) => {
+const AddEditPaymentModal = ({ payment, onClose, onSave, error, saving }) => {
   const isEdit = !!payment;
   const [customerName, setCustomerName] = useState(payment?.customerName ?? '');
   const [chitPlan, setChitPlan] = useState(payment?.chitPlan ?? '');
@@ -18,9 +19,10 @@ const AddEditPaymentModal = ({ payment, onClose, onSave, error }) => {
   const [dueDate, setDueDate] = useState(payment?.dueDate ?? '');
   const [status, setStatus] = useState(payment?.status ?? 'Pending');
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    onSave({ customerName, chitPlan, dueAmount, paidAmount, dueDate, status }, payment?.id);
+    if (saving) return;
+    await onSave({ customerName, chitPlan, dueAmount, paidAmount, dueDate, status }, payment?.id);
   };
 
   return (
@@ -62,8 +64,10 @@ const AddEditPaymentModal = ({ payment, onClose, onSave, error }) => {
             </select>
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 20 }}>
-            <button type="button" style={styles.modalBtnCancel} onClick={onClose}>Cancel</button>
-            <button type="submit" style={styles.modalBtnDownload}>{isEdit ? 'Update' : 'Add Payment'}</button>
+            <Button type="button" variant="secondary" onClick={onClose} disabled={saving} style={styles.modalBtnCancel}>Cancel</Button>
+            <Button type="submit" loading={saving} loadingText={isEdit ? 'Updating…' : 'Adding…'} style={styles.modalBtnDownload}>
+              {isEdit ? 'Update' : 'Add Payment'}
+            </Button>
           </div>
         </form>
       </div>
@@ -123,6 +127,8 @@ const Payment = () => {
   const [showAddPaymentModal, setShowAddPaymentModal] = useState(false);
   const [editingPayment, setEditingPayment] = useState(null);
   const [saveError, setSaveError] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const totalPages = Math.max(1, Math.ceil(payments.length / 10));
@@ -145,6 +151,7 @@ const Payment = () => {
   };
   const handleSavePayment = async (data, id) => {
     setSaveError(null);
+    setSaving(true);
     try {
       if (id) {
         await updatePaymentInDb(id, data);
@@ -156,16 +163,22 @@ const Payment = () => {
     } catch (e) {
       console.error('Save payment failed', e);
       setSaveError(e?.message || 'Failed to save payment');
+    } finally {
+      setSaving(false);
     }
   };
   const handleDelete = async (row) => {
     if (!row?.id) return;
+    if (!window.confirm('Delete this payment?')) return;
+    setDeleting(true);
     try {
       await deletePaymentFromDb(row.id);
       setOpenActionId(null);
       setOpenCardActionId(null);
     } catch (e) {
       console.error('Delete payment failed', e);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -187,17 +200,19 @@ const Payment = () => {
 
       {showAddPaymentModal && (
         <AddEditPaymentModal
-          onClose={() => { setShowAddPaymentModal(false); setSaveError(null); }}
+          onClose={() => { if (!saving) { setShowAddPaymentModal(false); setSaveError(null); } }}
           onSave={handleSavePayment}
           error={saveError}
+          saving={saving}
         />
       )}
       {editingPayment && (
         <AddEditPaymentModal
           payment={editingPayment}
-          onClose={() => { setEditingPayment(null); setSaveError(null); }}
+          onClose={() => { if (!saving) { setEditingPayment(null); setSaveError(null); } }}
           onSave={handleSavePayment}
           error={saveError}
+          saving={saving}
         />
       )}
 
@@ -216,10 +231,6 @@ const Payment = () => {
           </div>
           <div style={styles.headerActions} className="dashboard-header-actions">
             <button type="button" style={styles.addPaymentBtn} onClick={() => setShowAddPaymentModal(true)}>+ Add Payment</button>
-            <div style={styles.searchContainer} className="search-container">
-              <FiSearch style={styles.searchIcon} />
-              <input type="text" placeholder="Search for something..." style={styles.searchInput} />
-            </div>
             <div style={styles.headerIcons}>
               <button style={styles.iconButton}><FiSettings /></button>
               <button style={styles.iconButton}>
@@ -290,9 +301,10 @@ const Payment = () => {
           isOpen={!!openActionId}
           onClose={() => { setOpenActionId(null); setActionAnchorEl(null); }}
           anchorEl={actionAnchorEl}
+          busy={deleting}
           onView={() => { const row = payments.find((r) => r.id === openActionId); if (row) handleView(row); }}
           onEdit={() => { const row = payments.find((r) => r.id === openActionId); if (row) handleEdit(row); }}
-          onDelete={() => { const row = payments.find((r) => r.id === openActionId); if (row) handleDelete(row); }}
+          onDelete={() => { const row = payments.find((r) => r.id === openActionId); if (row) return handleDelete(row); }}
         />
 
         {loading && <p style={{ marginBottom: 16, color: '#666' }}>Loading payments…</p>}
@@ -333,9 +345,10 @@ const Payment = () => {
           isOpen={!!openCardActionId}
           onClose={() => { setOpenCardActionId(null); setCardActionAnchorEl(null); }}
           anchorEl={cardActionAnchorEl}
+          busy={deleting}
           onView={() => { const row = payments.find((r) => r.id === openCardActionId); if (row) handleView(row); }}
           onEdit={() => { const row = payments.find((r) => r.id === openCardActionId); if (row) handleEdit(row); }}
-          onDelete={() => { const row = payments.find((r) => r.id === openCardActionId); if (row) handleDelete(row); }}
+          onDelete={() => { const row = payments.find((r) => r.id === openCardActionId); if (row) return handleDelete(row); }}
         />
 
         {/* Pagination */}

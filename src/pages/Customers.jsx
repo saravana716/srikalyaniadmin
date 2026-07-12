@@ -1,45 +1,60 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
 import ActionMenu from '../components/ActionMenu';
+import Button from '../components/Button';
 import { FiSearch, FiSettings, FiBell, FiMenu, FiFilter, FiX } from 'react-icons/fi';
 import { MdKeyboardArrowUp, MdKeyboardArrowDown } from 'react-icons/md';
-import { subscribeCustomers, addCustomer as addCustomerToDb, deleteCustomer as deleteCustomerFromDb } from '../services/customersService';
+import { subscribeCustomers, addCustomer as addCustomerToDb, updateCustomer as updateCustomerInDb, deleteCustomer as deleteCustomerFromDb } from '../services/customersService';
 import { formatToIST } from '../utils/dateUtils';
 
 const MAROON = '#801A39';
 const LIGHT_GRAY = '#F0F0F0';
 const BORDER_GRAY = '#e0e0e0';
 
-const AddCustomerModal = ({ onClose, onAdd, error }) => {
-  const [name, setName] = useState('');
-  const [password, setPassword] = useState('');
-  const [amount, setAmount] = useState('');
-  const [plan, setPlan] = useState('Daily');
-  const [mobile, setMobile] = useState('');
+const AddEditCustomerModal = ({ customer, onClose, onSave, error, saving }) => {
+  const isEdit = !!customer;
+  const [name, setName] = useState(customer?.name ?? '');
+  const [password, setPassword] = useState(customer?.password ?? '');
+  const [amount, setAmount] = useState(customer?.amount ?? '');
+  const [plan, setPlan] = useState(customer?.plan ?? 'Daily');
+  const [mobile, setMobile] = useState(customer?.mobile ?? '');
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    onAdd({ name, password, amount: Number(amount) || 0, plan, mobile });
+    if (saving) return;
+    await onSave({ name, password, amount: Number(amount) || 0, plan, mobile }, customer?.id);
   };
 
   return (
     <div style={styles.modalOverlay} className="add-customer-modal-overlay" onClick={onClose}>
       <div style={styles.modalBox} className="add-customer-modal-box" onClick={(e) => e.stopPropagation()}>
         <div style={styles.modalHeader}>
-          <h2 style={styles.modalTitle}>Add Customer</h2>
+          <h2 style={styles.modalTitle}>{isEdit ? 'Edit Customer' : 'Add Customer'}</h2>
           <button type="button" style={styles.modalClose} onClick={onClose} aria-label="Close">
             <FiX size={24} />
           </button>
         </div>
         <form onSubmit={handleSubmit} style={styles.form}>
           {error && <p style={{ color: '#dc2626', marginBottom: 12, fontSize: 14 }}>{error}</p>}
+          {isEdit && (
+            <>
+              <div style={styles.formGroup}>
+                <label style={styles.formLabel}>Customer ID</label>
+                <input type="text" value={customer.cusId || ''} style={{ ...styles.formInput, backgroundColor: '#f3f4f6' }} readOnly />
+              </div>
+              <div style={styles.formGroup}>
+                <label style={styles.formLabel}>Joined Date (IST)</label>
+                <input type="text" value={formatToIST(customer.joinedDate)} style={{ ...styles.formInput, backgroundColor: '#f3f4f6' }} readOnly />
+              </div>
+            </>
+          )}
           <div style={styles.formGroup}>
             <label style={styles.formLabel}>Name</label>
             <input type="text" value={name} onChange={(e) => setName(e.target.value)} style={styles.formInput} placeholder="Enter name" required />
           </div>
           <div style={styles.formGroup}>
             <label style={styles.formLabel}>Password</label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} style={styles.formInput} placeholder="Enter password" required />
+            <input type="text" value={password} onChange={(e) => setPassword(e.target.value)} style={styles.formInput} placeholder="Enter password" required />
           </div>
           <div style={styles.formGroup}>
             <label style={styles.formLabel}>Amount (₹)</label>
@@ -58,10 +73,59 @@ const AddCustomerModal = ({ onClose, onAdd, error }) => {
             <input type="tel" value={mobile} onChange={(e) => setMobile(e.target.value)} style={styles.formInput} placeholder="Enter mobile number" required />
           </div>
           <div style={styles.modalFooter} className="add-customer-modal-footer">
-            <button type="button" style={styles.modalBtnCancel} onClick={onClose}>Cancel</button>
-            <button type="submit" style={styles.modalBtnPrimary}>Add Customer</button>
+            <Button type="button" variant="secondary" onClick={onClose} disabled={saving} style={styles.modalBtnCancel}>Cancel</Button>
+            <Button
+              type="submit"
+              loading={saving}
+              loadingText={isEdit ? 'Updating…' : 'Adding…'}
+              style={styles.modalBtnPrimary}
+            >
+              {isEdit ? 'Update Customer' : 'Add Customer'}
+            </Button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+};
+
+const ViewCustomerModal = ({ customer, onClose, onEdit }) => {
+  if (!customer) return null;
+
+  const rows = [
+    { label: 'Customer ID:', value: customer.cusId || '—' },
+    { label: 'Joined Date (IST):', value: formatToIST(customer.joinedDate) },
+    { label: 'Name:', value: customer.name },
+    { label: 'Password:', value: customer.password },
+    { label: 'Amount:', value: `₹ ${customer.amount ?? 0}` },
+    { label: 'Plan:', value: customer.plan },
+    { label: 'Mobile Number:', value: customer.mobile },
+  ];
+
+  return (
+    <div style={styles.viewOverlay} className="view-more-modal-overlay" onClick={onClose}>
+      <div style={styles.viewPanel} className="view-more-modal-box" onClick={(e) => e.stopPropagation()}>
+        <div style={styles.modalHeader}>
+          <h2 style={styles.modalTitle}>Customer Details</h2>
+          <button type="button" style={styles.modalClose} onClick={onClose} aria-label="Close">
+            <FiX size={24} />
+          </button>
+        </div>
+        <div style={styles.modalBody}>
+          <h3 style={styles.modalSectionTitle}>Customer Information</h3>
+          <div style={styles.modalDetails}>
+            {rows.map(({ label, value }) => (
+              <div key={label} style={styles.modalRow}>
+                <span style={styles.modalLabel}>{label}</span>
+                <span style={styles.modalValue}>{value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={styles.modalFooter}>
+          <Button type="button" variant="secondary" onClick={onClose} style={styles.modalBtnCancel}>Close</Button>
+          <Button type="button" onClick={() => { onClose(); onEdit(customer); }} style={styles.modalBtnPrimary}>Edit</Button>
+        </div>
       </div>
     </div>
   );
@@ -74,10 +138,14 @@ const Customers = () => {
   const [actionAnchorEl, setActionAnchorEl] = useState(null);
   const [openCardActionId, setOpenCardActionId] = useState(null);
   const [cardActionAnchorEl, setCardActionAnchorEl] = useState(null);
-  const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [viewCustomer, setViewCustomer] = useState(null);
+  const [editingCustomer, setEditingCustomer] = useState(null);
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [addError, setAddError] = useState(null);
+  const [saveError, setSaveError] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const totalPages = Math.max(1, Math.ceil(customers.length / 10));
 
   useEffect(() => {
@@ -88,27 +156,54 @@ const Customers = () => {
     return () => unsub();
   }, []);
 
-  const handleView = (row) => { /* TODO: navigate or modal */ };
-  const handleEdit = (row) => { /* TODO */ };
+  const closeMenus = () => {
+    setOpenActionId(null);
+    setActionAnchorEl(null);
+    setOpenCardActionId(null);
+    setCardActionAnchorEl(null);
+  };
+
+  const handleView = (row) => {
+    closeMenus();
+    setViewCustomer(row);
+  };
+
+  const handleEdit = (row) => {
+    closeMenus();
+    setEditingCustomer(row);
+  };
+
   const handleDelete = async (row) => {
     if (!row?.id) return;
+    if (!window.confirm(`Delete customer "${row.name}"?`)) return;
+    closeMenus();
+    setDeleting(true);
     try {
       await deleteCustomerFromDb(row.id);
-      setOpenActionId(null);
-      setOpenCardActionId(null);
     } catch (e) {
       console.error('Delete customer failed', e);
+      alert(e?.message || 'Failed to delete customer');
+    } finally {
+      setDeleting(false);
     }
   };
 
-  const handleAddCustomer = async (data) => {
-    setAddError(null);
+  const handleSaveCustomer = async (data, id) => {
+    setSaveError(null);
+    setSaving(true);
     try {
-      await addCustomerToDb(data);
-      setShowAddCustomerModal(false);
+      if (id) {
+        await updateCustomerInDb(id, data);
+        setEditingCustomer(null);
+      } else {
+        await addCustomerToDb(data);
+        setShowAddModal(false);
+      }
     } catch (e) {
-      console.error('Add customer failed', e);
-      setAddError(e?.message || 'Failed to add customer');
+      console.error('Save customer failed', e);
+      setSaveError(e?.message || 'Failed to save customer');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -119,11 +214,28 @@ const Customers = () => {
         <div className="sidebar-overlay" onClick={() => setIsSidebarOpen(false)} />
       )}
 
-      {showAddCustomerModal && (
-        <AddCustomerModal
-          onClose={() => { setShowAddCustomerModal(false); setAddError(null); }}
-          onAdd={handleAddCustomer}
-          error={addError}
+      {showAddModal && (
+        <AddEditCustomerModal
+          onClose={() => { if (!saving) { setShowAddModal(false); setSaveError(null); } }}
+          onSave={handleSaveCustomer}
+          error={saveError}
+          saving={saving}
+        />
+      )}
+      {editingCustomer && (
+        <AddEditCustomerModal
+          customer={editingCustomer}
+          onClose={() => { if (!saving) { setEditingCustomer(null); setSaveError(null); } }}
+          onSave={handleSaveCustomer}
+          error={saveError}
+          saving={saving}
+        />
+      )}
+      {viewCustomer && (
+        <ViewCustomerModal
+          customer={viewCustomer}
+          onClose={() => setViewCustomer(null)}
+          onEdit={(row) => setEditingCustomer(row)}
         />
       )}
 
@@ -141,10 +253,6 @@ const Customers = () => {
             <h1 style={styles.pageTitle}>Customers</h1>
           </div>
           <div style={styles.headerActions} className="dashboard-header-actions">
-            <div style={styles.searchContainer} className="search-container">
-              <FiSearch style={styles.searchIcon} />
-              <input type="text" placeholder="Search for something..." style={styles.searchInput} />
-            </div>
             <div style={styles.headerIcons}>
               <button style={styles.iconButton}><FiSettings /></button>
               <button style={styles.iconButton}>
@@ -174,7 +282,7 @@ const Customers = () => {
             <button style={styles.filterIconBtn} aria-label="Search"><FiSearch /></button>
             <button style={styles.filterIconBtn} aria-label="Filter"><FiFilter /></button>
           </div>
-          <button type="button" style={styles.addBtn} className="add-btn" onClick={() => setShowAddCustomerModal(true)}>+ Add Customer</button>
+          <button type="button" style={styles.addBtn} className="add-btn" onClick={() => setShowAddModal(true)}>+ Add Customer</button>
         </div>
 
         {/* Table action menu (portal, outside table) */}
@@ -182,9 +290,10 @@ const Customers = () => {
           isOpen={!!openActionId}
           onClose={() => { setOpenActionId(null); setActionAnchorEl(null); }}
           anchorEl={actionAnchorEl}
+          busy={deleting}
           onView={() => { const row = customers.find((r) => r.id === openActionId); if (row) handleView(row); }}
           onEdit={() => { const row = customers.find((r) => r.id === openActionId); if (row) handleEdit(row); }}
-          onDelete={() => { const row = customers.find((r) => r.id === openActionId); if (row) handleDelete(row); }}
+          onDelete={() => { const row = customers.find((r) => r.id === openActionId); if (row) return handleDelete(row); }}
         />
 
         {/* Table - desktop */}
@@ -242,9 +351,10 @@ const Customers = () => {
           isOpen={!!openCardActionId}
           onClose={() => { setOpenCardActionId(null); setCardActionAnchorEl(null); }}
           anchorEl={cardActionAnchorEl}
+          busy={deleting}
           onView={() => { const row = customers.find((r) => r.id === openCardActionId); if (row) handleView(row); }}
           onEdit={() => { const row = customers.find((r) => r.id === openCardActionId); if (row) handleEdit(row); }}
-          onDelete={() => { const row = customers.find((r) => r.id === openCardActionId); if (row) handleDelete(row); }}
+          onDelete={() => { const row = customers.find((r) => r.id === openCardActionId); if (row) return handleDelete(row); }}
         />
 
         {/* Cards - mobile only (hidden on desktop) */}
@@ -638,6 +748,14 @@ const styles = {
   modalFooter: { display: 'flex', justifyContent: 'flex-end', gap: '12px', paddingTop: '20px', marginTop: '8px', borderTop: `1px solid ${BORDER_GRAY}` },
   modalBtnCancel: { padding: '10px 20px', borderRadius: '8px', border: '1px solid #9ca3af', backgroundColor: '#fff', color: '#374151', fontSize: '14px', fontWeight: '500', cursor: 'pointer' },
   modalBtnPrimary: { padding: '10px 20px', borderRadius: '8px', border: 'none', backgroundColor: MAROON, color: '#fff', fontSize: '14px', fontWeight: '500', cursor: 'pointer' },
+  viewOverlay: { position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: '20px' },
+  viewPanel: { backgroundColor: '#fff', borderRadius: '12px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)', maxWidth: '520px', width: '100%', maxHeight: '90vh', overflow: 'auto' },
+  modalBody: { padding: '24px' },
+  modalSectionTitle: { fontSize: '16px', fontWeight: '700', color: MAROON, marginBottom: '16px' },
+  modalDetails: { display: 'flex', flexDirection: 'column', gap: '12px' },
+  modalRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', fontSize: '14px' },
+  modalLabel: { fontWeight: '500', color: '#4b5563' },
+  modalValue: { fontWeight: '700', color: '#111', textAlign: 'right' },
 };
 
 export default Customers;
