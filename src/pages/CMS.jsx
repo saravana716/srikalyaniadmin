@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { FileText, Download, BarChart2 } from 'lucide-react';
+import { Layout, FileEdit, Plus } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import '../assets/styles/Dashboard.css';
 
-const Reports = () => {
+const CMS = () => {
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
 
@@ -18,18 +18,18 @@ const Reports = () => {
                         <div className="breadcrumb">
                             <span className="cursor-pointer" onClick={() => window.location.href = '/dashboard'}>Dashboard</span>
                             <span className="separator"> &gt; </span>
-                            <span className="active">Reports</span>
+                            <span className="active">CMS</span>
                         </div>
                         <div className="page-title-row">
-                            <h1 className="text-2xl font-bold">Reports</h1>
+                            <h1 className="text-2xl font-bold">Content Management</h1>
                         </div>
                     </div>
 
                     <div className="table-card">
                         <div className="empty-state" style={{ padding: '80px', textAlign: 'center', color: '#64748b' }}>
-                            <FileText size={48} style={{ margin: '0 auto 16px', opacity: 0.5 }} />
-                            <h3 className="text-lg font-semibold">Reports & Analytics</h3>
-                            <p>View and download detailed business reports here.</p>
+                            <Layout size={48} style={{ margin: '0 auto 16px', opacity: 0.5 }} />
+                            <h3 className="text-lg font-semibold">CMS Management</h3>
+                            <p>Manage website content, banners, and blogs here.</p>
                         </div>
                     </div>
                 </div>
@@ -38,4 +38,4 @@ const Reports = () => {
     );
 };
 
-export default Reports;
+export default CMS;

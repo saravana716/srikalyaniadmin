@@ -1,0 +1,83 @@
+/* Utilities.css */
+.tables-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+}
+
+@media (max-width: 1024px) {
+    .tables-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.text-sm {
+    font-size: 0.875rem;
+}
+
+.text-xs {
+    font-size: 0.75rem;
+}
+
+.font-medium {
+    font-weight: 500;
+}
+
+.text-gray-500 {
+    color: #6b7280;
+}
+
+.text-gray-400 {
+    color: #9ca3af;
+}
+
+.bg-gray-100 {
+    background-color: #f3f4f6;
+}
+
+.bg-blue-50 {
+    background-color: #eff6ff;
+}
+
+.bg-blue {
+    background-color: var(--primary-color) !important;
+    color: white !important;
+    padding: 0.5rem 1.25rem !important;
+}
+
+.cursor-pointer {
+    cursor: pointer;
+}
+
+.flex-col {
+    flex-direction: column;
+}
+
+.self-start {
+    align-self: flex-start;
+}
+
+.mb-4 {
+    margin-bottom: 1rem;
+}
+
+.mt-neg-140 {
+    margin-top: -160px;
+    pointer-events: none;
+}
+
+.mb-100 {
+    margin-bottom: 120px;
+}
+
+.text-center {
+    text-align: center;
+}
+
+.gap-2 {
+    gap: 0.5rem;
+}
+
+.gap-1 {
+    gap: 0.25rem;
+}

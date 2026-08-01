@@ -1,0 +1,40 @@
+rules_version = '2';
+
+// VisionKart Admin - Firebase Storage Rules
+// App uses custom auth (Firestore + localStorage), not Firebase Auth,
+// so request.auth is null. These rules allow uploads for product paths.
+// For production: consider switching to Firebase Auth so you can use
+// allow write: if request.auth != null;
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Product photos (path-only; add size/type checks if needed)
+    match /products/photos/{fileName} {
+      allow read, write: if true;
+    }
+
+    // Product videos
+    match /products/videos/{fileName} {
+      allow read, write: if true;
+    }
+
+    // 360 view images
+    match /products/360views/{fileName} {
+      allow read, write: if true;
+    }
+
+    // Category and subcategory images
+    match /categories/images/{fileName} {
+      allow read, write: if true;
+    }
+    match /categories/subcategories/{fileName} {
+      allow read, write: if true;
+    }
+
+    // Site branding (logo, favicon) and admin profile photos
+    match /settings/{path=**} {
+      allow read, write: if true;
+    }
+  }
+}

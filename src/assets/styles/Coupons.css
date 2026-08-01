@@ -1,0 +1,141 @@
+.coupons-intro {
+    font-size: 0.875rem;
+    color: #64748b;
+    margin-bottom: 1rem;
+}
+
+.coupons-table code.coupon-code {
+    background: #f1f5f9;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #0f172a;
+}
+
+.coupons-empty-cell {
+    text-align: center;
+    padding: 3rem 1rem !important;
+    color: #64748b;
+    vertical-align: middle;
+}
+
+.coupons-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 1rem;
+}
+
+.coupons-modal {
+    background: #fff;
+    border-radius: 12px;
+    max-width: 480px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+}
+
+.coupons-modal .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.coupons-modal .modal-header h3 {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 600;
+}
+
+.coupons-modal .modal-body {
+    padding: 1.25rem;
+}
+
+.coupons-modal .form-group {
+    margin-bottom: 1rem;
+}
+
+.coupons-modal .form-group label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #374151;
+    margin-bottom: 0.375rem;
+}
+
+.coupons-modal .form-group input[type="text"],
+.coupons-modal .form-group input[type="number"],
+.coupons-modal .form-group input[type="date"],
+.coupons-modal .form-group select,
+.coupons-modal .form-group textarea {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 0.875rem;
+}
+
+.coupons-form-row {
+    display: flex;
+    gap: 1rem;
+}
+
+.coupons-form-row .form-group.flex-1 {
+    flex: 1;
+    min-width: 0;
+}
+
+.form-hint {
+    display: block;
+    margin-top: 0.25rem;
+    font-size: 0.75rem;
+    color: #64748b;
+}
+
+.checkbox-row label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+}
+
+.checkbox-row input[type="checkbox"] {
+    width: auto;
+}
+
+.coupons-modal .modal-actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+    margin-top: 1.25rem;
+    padding-top: 1rem;
+    border-top: 1px solid #f1f5f9;
+}
+
+.coupons-modal .select-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.coupons-modal .select-wrapper select {
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: 2.5rem;
+}
+
+.coupons-modal .select-wrapper .select-icon {
+    position: absolute;
+    right: 0.625rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94a3b8;
+    pointer-events: none;
+}

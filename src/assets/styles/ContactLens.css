@@ -1,0 +1,373 @@
+.contact-lens-variants {
+    padding: 1.25rem 1.5rem;
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+    border: 1px solid #e0e7ff;
+    background: #f8fafc;
+}
+
+.contact-lens-help {
+    font-size: 0.8125rem;
+    color: #64748b;
+    margin: 0 0 1rem;
+    line-height: 1.45;
+}
+
+.contact-lens-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.contact-lens-variant-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.75rem 1rem;
+}
+
+.contact-lens-variant-row .form-group {
+    margin-bottom: 0;
+    min-width: 140px;
+}
+
+.contact-lens-custom-ml {
+    max-width: 140px;
+}
+
+.contact-lens-variant-row .contact-lens-remove {
+    margin-bottom: 2px;
+    flex-shrink: 0;
+}
+
+.contact-lens-add {
+    margin-top: 1rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.contact-lens-subcategory-block {
+    margin-top: 0.75rem;
+    margin-bottom: 0.25rem;
+}
+
+.contact-lens-options-panel {
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+    padding: 1.25rem 1.5rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    background: #f8fafc;
+}
+
+.contact-lens-type-section,
+.contact-lens-schedule-section {
+    margin-bottom: 1.25rem;
+}
+
+.contact-lens-options-panel .contact-lens-help {
+    margin-top: 0.25rem;
+}
+
+.cl-type-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.cl-type-card {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+    padding: 0.85rem;
+    text-align: left;
+    background: #fff;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.cl-type-card:hover {
+    border-color: #94a3b8;
+}
+
+.cl-type-card.is-selected {
+    border-color: #0f766e;
+    background: #f0fdfa;
+    box-shadow: 0 0 0 1px #0f766e;
+}
+
+.cl-type-card-media {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    aspect-ratio: 1.35;
+    border-radius: 10px;
+    background: #f8fafc;
+    overflow: hidden;
+}
+
+.cl-type-card.is-selected .cl-type-card-media {
+    background: #ccfbf1;
+}
+
+.cl-type-card-img {
+    width: 72%;
+    max-width: 88px;
+    height: auto;
+    display: block;
+}
+
+.cl-type-card-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 0;
+    padding: 0 0.15rem 0.15rem;
+}
+
+.cl-type-card-label {
+    font-size: 0.9375rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.cl-type-card-desc {
+    font-size: 0.75rem;
+    line-height: 1.35;
+    color: #64748b;
+}
+
+.cl-schedule-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+}
+
+.cl-schedule-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.55rem 1rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #334155;
+    background: #fff;
+    border: 2px solid #e2e8f0;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.cl-schedule-chip:hover {
+    border-color: #94a3b8;
+}
+
+.cl-schedule-chip.is-selected {
+    border-color: #0f766e;
+    background: #0f766e;
+    color: #fff;
+}
+
+.contact-lens-pack-section {
+    margin-bottom: 0.25rem;
+}
+
+.cl-pack-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+}
+
+.cl-pack-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.55rem 1rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #334155;
+    background: #fff;
+    border: 2px solid #e2e8f0;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.cl-pack-chip:hover {
+    border-color: #94a3b8;
+}
+
+.cl-pack-chip.is-selected {
+    border-color: #0f766e;
+    background: #0f766e;
+    color: #fff;
+}
+
+.cl-custom-pack {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    margin-top: 0.85rem;
+    padding: 0.85rem 1rem;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+}
+
+.cl-custom-pack label {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #334155;
+    margin: 0;
+}
+
+.cl-custom-pack input {
+    width: 120px;
+    padding: 0.45rem 0.6rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 0.875rem;
+}
+
+.cl-custom-pack-hint {
+    font-size: 0.75rem;
+    color: #94a3b8;
+}
+
+@media (max-width: 768px) {
+    .cl-type-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Lenses per pack (legacy styles kept minimal; panel removed from UI) */
+.lens-pack-panel {
+    display: none;
+}
+
+/* Lenses per pack (non-solution contact lens subcategories) */
+.lens-pack-panel {
+    padding: 1.25rem 1.5rem;
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+    border: 1px solid #e0e7ff;
+    background: #f8fafc;
+    border-radius: 12px;
+}
+
+.lens-pack-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.lens-pack-panel-title {
+    margin: 0;
+    font-size: 0.875rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #1e3a8a;
+}
+
+.lens-pack-back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.4rem 0.75rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #1e40af;
+    background: #fff;
+    border: 1px solid #bfdbfe;
+    border-radius: 999px;
+    cursor: pointer;
+}
+
+.lens-pack-back-btn:hover {
+    background: #eff6ff;
+}
+
+.lens-pack-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.lens-pack-card {
+    display: flex;
+    gap: 0.75rem;
+    padding: 1rem 1.1rem;
+    background: #fff;
+    border: 2px solid #e2e8f0;
+    border-radius: 14px;
+}
+
+.lens-pack-card-indicator {
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+    margin-top: 0.35rem;
+    border-radius: 50%;
+    background: #22c55e;
+}
+
+.lens-pack-card-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.lens-pack-card-top {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+}
+
+.lens-pack-field-grow {
+    flex: 1;
+    margin-bottom: 0.75rem;
+}
+
+.lens-pack-remove {
+    flex-shrink: 0;
+    padding: 0.35rem;
+    border: none;
+    background: transparent;
+    color: #94a3b8;
+    cursor: pointer;
+    border-radius: 6px;
+}
+
+.lens-pack-remove:hover {
+    color: #dc2626;
+    background: #fef2f2;
+}
+
+.lens-pack-fields-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem 1rem;
+}
+
+.lens-pack-field-price {
+    flex: 0 1 140px;
+    margin-bottom: 0;
+}
+
+.lens-pack-field-qty {
+    flex: 1 1 180px;
+    min-width: 160px;
+    margin-bottom: 0;
+}
+
+.lens-pack-card .form-group {
+    margin-bottom: 0.65rem;
+}
