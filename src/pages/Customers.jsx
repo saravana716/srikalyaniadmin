@@ -1,538 +1,761 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import PaginationBar from '../components/PaginationBar';
-import { usePagination, DEFAULT_PAGE_SIZE } from '../hooks/usePagination';
-import { Search, Filter, Download, Eye, Trash2, ArrowUpDown, Loader2, X, ShoppingBag } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
-import Header from '../components/Header';
-import { db } from '../firebase';
-import { collection, onSnapshot, deleteDoc, doc, query, orderBy } from 'firebase/firestore';
-import { useNavigate } from 'react-router-dom';
-import '../assets/styles/Dashboard.css';
-import '../assets/styles/Table.css';
-import '../assets/styles/Products.css';
-import {
-    formatTimestamp,
-    formatTimestampShort,
-    formatRupee,
-    collectPrimitiveEntries,
-    coerceFirestoreDate,
-    getUserDisplayName,
-    getUserEmail,
-    getUserPhone,
-    getUserAddressSummary,
-    getUserCreatedAt,
-    getUserSearchBlob,
-    getOrderTotalValue,
-} from '../utils/firestoreDisplay';
+import ActionMenu from '../components/ActionMenu';
+import Button from '../components/Button';
+import { FiSearch, FiSettings, FiBell, FiMenu, FiFilter, FiX } from 'react-icons/fi';
+import { MdKeyboardArrowUp, MdKeyboardArrowDown } from 'react-icons/md';
+import { subscribeCustomers, addCustomer as addCustomerToDb, updateCustomer as updateCustomerInDb, deleteCustomer as deleteCustomerFromDb } from '../services/customersService';
+import { formatToIST } from '../utils/dateUtils';
 
-function ordersForUser(orders, user) {
-    if (!user) return [];
-    const email = getUserEmail(user).toLowerCase();
-    const phone = getUserPhone(user).replace(/\s/g, '');
-    const uid = user.id;
+const MAROON = '#801A39';
+const LIGHT_GRAY = '#F0F0F0';
+const BORDER_GRAY = '#e0e0e0';
 
-    return orders.filter((o) => {
-        if (uid && (o.userId === uid || o.customerId === uid)) return true;
-        const orderEmails = [
-            o.customerEmail,
-            o.email,
-            o.userEmail,
-            o.billingAddress?.email,
-            o.shippingAddress?.email,
-        ]
-            .filter(Boolean)
-            .map((e) => String(e).toLowerCase().trim());
-        if (email && orderEmails.includes(email)) return true;
-        const orderPhones = [
-            o.phone,
-            o.phoneNumber,
-            o.billingAddress?.phone,
-            o.shippingAddress?.phone,
-        ]
-            .filter(Boolean)
-            .map((p) => String(p).replace(/\s/g, ''));
-        if (phone && orderPhones.some((p) => p === phone)) return true;
-        return false;
-    });
-}
+const AddEditCustomerModal = ({ customer, onClose, onSave, error, saving }) => {
+  const isEdit = !!customer;
+  const [name, setName] = useState(customer?.name ?? '');
+  const [password, setPassword] = useState(customer?.password ?? '');
+  const [amount, setAmount] = useState(customer?.amount ?? '');
+  const [plan, setPlan] = useState(customer?.plan ?? 'Daily');
+  const [mobile, setMobile] = useState(customer?.mobile ?? '');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (saving) return;
+    await onSave({ name, password, amount: Number(amount) || 0, plan, mobile }, customer?.id);
+  };
+
+  return (
+    <div style={styles.modalOverlay} className="add-customer-modal-overlay" onClick={onClose}>
+      <div style={styles.modalBox} className="add-customer-modal-box" onClick={(e) => e.stopPropagation()}>
+        <div style={styles.modalHeader}>
+          <h2 style={styles.modalTitle}>{isEdit ? 'Edit Customer' : 'Add Customer'}</h2>
+          <button type="button" style={styles.modalClose} onClick={onClose} aria-label="Close">
+            <FiX size={24} />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} style={styles.form}>
+          {error && <p style={{ color: '#dc2626', marginBottom: 12, fontSize: 14 }}>{error}</p>}
+          {isEdit && (
+            <>
+              <div style={styles.formGroup}>
+                <label style={styles.formLabel}>Customer ID</label>
+                <input type="text" value={customer.cusId || ''} style={{ ...styles.formInput, backgroundColor: '#f3f4f6' }} readOnly />
+              </div>
+              <div style={styles.formGroup}>
+                <label style={styles.formLabel}>Joined Date (IST)</label>
+                <input type="text" value={formatToIST(customer.joinedDate)} style={{ ...styles.formInput, backgroundColor: '#f3f4f6' }} readOnly />
+              </div>
+            </>
+          )}
+          <div style={styles.formGroup}>
+            <label style={styles.formLabel}>Name</label>
+            <input type="text" value={name} onChange={(e) => setName(e.target.value)} style={styles.formInput} placeholder="Enter name" required />
+          </div>
+          <div style={styles.formGroup}>
+            <label style={styles.formLabel}>Password</label>
+            <input type="text" value={password} onChange={(e) => setPassword(e.target.value)} style={styles.formInput} placeholder="Enter password" required />
+          </div>
+          <div style={styles.formGroup}>
+            <label style={styles.formLabel}>Amount (₹)</label>
+            <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} style={styles.formInput} placeholder="Enter amount" min="0" />
+          </div>
+          <div style={styles.formGroup}>
+            <label style={styles.formLabel}>Plan</label>
+            <select value={plan} onChange={(e) => setPlan(e.target.value)} style={styles.formSelect}>
+              <option value="Daily">Daily</option>
+              <option value="Monthly">Monthly</option>
+              <option value="Weekly">Weekly</option>
+            </select>
+          </div>
+          <div style={styles.formGroup}>
+            <label style={styles.formLabel}>Mobile Number</label>
+            <input type="tel" value={mobile} onChange={(e) => setMobile(e.target.value)} style={styles.formInput} placeholder="Enter mobile number" required />
+          </div>
+          <div style={styles.modalFooter} className="add-customer-modal-footer">
+            <Button type="button" variant="secondary" onClick={onClose} disabled={saving} style={styles.modalBtnCancel}>Cancel</Button>
+            <Button
+              type="submit"
+              loading={saving}
+              loadingText={isEdit ? 'Updating…' : 'Adding…'}
+              style={styles.modalBtnPrimary}
+            >
+              {isEdit ? 'Update Customer' : 'Add Customer'}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+const ViewCustomerModal = ({ customer, onClose, onEdit }) => {
+  if (!customer) return null;
+
+  const rows = [
+    { label: 'Customer ID:', value: customer.cusId || '—' },
+    { label: 'Joined Date (IST):', value: formatToIST(customer.joinedDate) },
+    { label: 'Name:', value: customer.name },
+    { label: 'Password:', value: customer.password },
+    { label: 'Amount:', value: `₹ ${customer.amount ?? 0}` },
+    { label: 'Plan:', value: customer.plan },
+    { label: 'Mobile Number:', value: customer.mobile },
+  ];
+
+  return (
+    <div style={styles.viewOverlay} className="view-more-modal-overlay" onClick={onClose}>
+      <div style={styles.viewPanel} className="view-more-modal-box" onClick={(e) => e.stopPropagation()}>
+        <div style={styles.modalHeader}>
+          <h2 style={styles.modalTitle}>Customer Details</h2>
+          <button type="button" style={styles.modalClose} onClick={onClose} aria-label="Close">
+            <FiX size={24} />
+          </button>
+        </div>
+        <div style={styles.modalBody}>
+          <h3 style={styles.modalSectionTitle}>Customer Information</h3>
+          <div style={styles.modalDetails}>
+            {rows.map(({ label, value }) => (
+              <div key={label} style={styles.modalRow}>
+                <span style={styles.modalLabel}>{label}</span>
+                <span style={styles.modalValue}>{value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={styles.modalFooter}>
+          <Button type="button" variant="secondary" onClick={onClose} style={styles.modalBtnCancel}>Close</Button>
+          <Button type="button" onClick={() => { onClose(); onEdit(customer); }} style={styles.modalBtnPrimary}>Edit</Button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const Customers = () => {
-    const [sidebarOpen, setSidebarOpen] = useState(false);
-    const [users, setUsers] = useState([]);
-    const [orders, setOrders] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [viewUser, setViewUser] = useState(null);
-    const navigate = useNavigate();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [openActionId, setOpenActionId] = useState(null);
+  const [actionAnchorEl, setActionAnchorEl] = useState(null);
+  const [openCardActionId, setOpenCardActionId] = useState(null);
+  const [cardActionAnchorEl, setCardActionAnchorEl] = useState(null);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [viewCustomer, setViewCustomer] = useState(null);
+  const [editingCustomer, setEditingCustomer] = useState(null);
+  const [customers, setCustomers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saveError, setSaveError] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const totalPages = Math.max(1, Math.ceil(customers.length / 10));
 
-    const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
+  useEffect(() => {
+    const unsub = subscribeCustomers((list) => {
+      setCustomers(list.map((row, i) => ({ ...row, sno: i + 1 })));
+      setLoading(false);
+    });
+    return () => unsub();
+  }, []);
 
-    useEffect(() => {
-        const unsubscribe = onSnapshot(collection(db, 'users'), (snapshot) => {
-            const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-            list.sort((a, b) => {
-                const ta = coerceFirestoreDate(getUserCreatedAt(a))?.getTime() ?? 0;
-                const tb = coerceFirestoreDate(getUserCreatedAt(b))?.getTime() ?? 0;
-                return tb - ta;
-            });
-            setUsers(list);
-            setLoading(false);
-        });
-        return () => unsubscribe();
-    }, []);
+  const closeMenus = () => {
+    setOpenActionId(null);
+    setActionAnchorEl(null);
+    setOpenCardActionId(null);
+    setCardActionAnchorEl(null);
+  };
 
-    useEffect(() => {
-        const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
-        const unsub = onSnapshot(q, (snapshot) => {
-            setOrders(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
-        });
-        return () => unsub();
-    }, []);
+  const handleView = (row) => {
+    closeMenus();
+    setViewCustomer(row);
+  };
 
-    const handleDelete = async (id) => {
-        if (
-            !window.confirm(
-                'Remove this user profile from Firestore? This does not delete the Firebase Auth account.'
-            )
-        ) {
-            return;
-        }
-        try {
-            await deleteDoc(doc(db, 'users', id));
-            setViewUser(null);
-        } catch (error) {
-            console.error('Error deleting:', error);
-            alert('Failed to delete user document');
-        }
-    };
+  const handleEdit = (row) => {
+    closeMenus();
+    setEditingCustomer(row);
+  };
 
-    const filteredUsers = useMemo(() => {
-        const qv = searchTerm.trim().toLowerCase();
-        return users.filter((u) => {
-            if (!qv) return true;
-            return getUserSearchBlob(u).includes(qv);
-        });
-    }, [users, searchTerm]);
+  const handleDelete = async (row) => {
+    if (!row?.id) return;
+    if (!window.confirm(`Delete customer "${row.name}"?`)) return;
+    closeMenus();
+    setDeleting(true);
+    try {
+      await deleteCustomerFromDb(row.id);
+    } catch (e) {
+      console.error('Delete customer failed', e);
+      alert(e?.message || 'Failed to delete customer');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
-    const {
-        currentPage,
-        setCurrentPage,
-        totalPages,
-        paginatedItems: paginatedUsers,
-        pageStart,
-        pageEnd,
-    } = usePagination(filteredUsers, DEFAULT_PAGE_SIZE, searchTerm);
+  const handleSaveCustomer = async (data, id) => {
+    setSaveError(null);
+    setSaving(true);
+    try {
+      if (id) {
+        await updateCustomerInDb(id, data);
+        setEditingCustomer(null);
+      } else {
+        await addCustomerToDb(data);
+        setShowAddModal(false);
+      }
+    } catch (e) {
+      console.error('Save customer failed', e);
+      setSaveError(e?.message || 'Failed to save customer');
+    } finally {
+      setSaving(false);
+    }
+  };
 
-    const relatedOrders = useMemo(
-        () => (viewUser ? ordersForUser(orders, viewUser) : []),
-        [viewUser, orders]
-    );
+  return (
+    <div style={styles.container} className="dashboard-container customers-page">
+      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+      {isSidebarOpen && (
+        <div className="sidebar-overlay" onClick={() => setIsSidebarOpen(false)} />
+      )}
 
-    const computedStats = useMemo(() => {
-        const total = relatedOrders.reduce((acc, o) => acc + (parseFloat(getOrderTotalValue(o)) || 0), 0);
-        return { orderCount: relatedOrders.length, totalSpent: total };
-    }, [relatedOrders]);
+      {showAddModal && (
+        <AddEditCustomerModal
+          onClose={() => { if (!saving) { setShowAddModal(false); setSaveError(null); } }}
+          onSave={handleSaveCustomer}
+          error={saveError}
+          saving={saving}
+        />
+      )}
+      {editingCustomer && (
+        <AddEditCustomerModal
+          customer={editingCustomer}
+          onClose={() => { if (!saving) { setEditingCustomer(null); setSaveError(null); } }}
+          onSave={handleSaveCustomer}
+          error={saveError}
+          saving={saving}
+        />
+      )}
+      {viewCustomer && (
+        <ViewCustomerModal
+          customer={viewCustomer}
+          onClose={() => setViewCustomer(null)}
+          onEdit={(row) => setEditingCustomer(row)}
+        />
+      )}
 
-    const extraExclude = new Set([
-        'id',
-        'name',
-        'displayName',
-        'fullName',
-        'firstName',
-        'lastName',
-        'email',
-        'userEmail',
-        'phone',
-        'phoneNumber',
-        'mobile',
-        'address',
-        'defaultAddress',
-        'shippingAddress',
-        'savedAddresses',
-        'createdAt',
-        'created_at',
-        'joinedAt',
-        'registeredAt',
-        'updatedAt',
-        'photoURL',
-        'photoUrl',
-        'avatar',
-        'purchases',
-        'ordersCount',
-    ]);
-    const extraPrimitives = viewUser ? collectPrimitiveEntries(viewUser, extraExclude) : [];
-
-    const openRelatedOrderInvoiceOrDetails = (order) => {
-        if (order.invoiceUrl) {
-            window.open(order.invoiceUrl, '_blank', 'noopener,noreferrer');
-            return;
-        }
-        navigate(`/orders?order=${encodeURIComponent(order.id)}`);
-    };
-
-    return (
-        <div className="dashboard-container">
-            <Sidebar isOpen={sidebarOpen} toggleSidebar={toggleSidebar} />
-            <div className="main-content">
-                <Header toggleSidebar={toggleSidebar} />
-                <div className="dashboard-content">
-                    <div className="content-header">
-                        <div className="breadcrumb">
-                            <span className="cursor-pointer" onClick={() => navigate('/dashboard')}>
-                                Dashboard
-                            </span>
-                            <span className="separator"> &gt; </span>
-                            <span className="active">Customers</span>
-                        </div>
-                        <div className="page-title-row">
-                            <div>
-                                <h1 className="text-2xl font-bold">Customers</h1>
-                                <p className="text-sm text-slate-500 mt-0.5">
-                                    Live data from the <code className="text-xs bg-slate-100 px-1 rounded">users</code>{' '}
-                                    collection
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="controls-row">
-                        <div className="search-box">
-                            <Search className="search-icon" size={18} />
-                            <input
-                                type="text"
-                                placeholder="Search name, email, phone, user id…"
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                            />
-                        </div>
-                        <div className="action-buttons">
-                            <button type="button" className="btn-secondary">
-                                <Filter size={18} /> Filter
-                            </button>
-                            <button type="button" className="btn-secondary">
-                                <Download size={18} /> Export
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className="table-card">
-                        <div className="data-table-container">
-                            {loading ? (
-                                <div className="flex items-center justify-center p-20">
-                                    <Loader2 className="animate-spin text-blue-500" size={40} />
-                                </div>
-                            ) : (
-                                <table className="data-table">
-                                    <thead>
-                                        <tr>
-                                            <th>
-                                                <div className="th-content">
-                                                    User <ArrowUpDown size={14} />
-                                                </div>
-                                            </th>
-                                            <th>
-                                                <div className="th-content">
-                                                    Contact <ArrowUpDown size={14} />
-                                                </div>
-                                            </th>
-                                            <th>
-                                                <div className="th-content">
-                                                    Purchases <ArrowUpDown size={14} />
-                                                </div>
-                                            </th>
-                                            <th>
-                                                <div className="th-content">
-                                                    Orders <ArrowUpDown size={14} />
-                                                </div>
-                                            </th>
-                                            <th>
-                                                <div className="th-content">
-                                                    Address <ArrowUpDown size={14} />
-                                                </div>
-                                            </th>
-                                            <th>
-                                                <div className="th-content">
-                                                    Joined <ArrowUpDown size={14} />
-                                                </div>
-                                            </th>
-                                            <th style={{ textAlign: 'right' }}>Action</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {paginatedUsers.map((user) => {
-                                            const ro = ordersForUser(orders, user);
-                                            const liveTotal = ro.reduce(
-                                                (acc, o) => acc + (parseFloat(getOrderTotalValue(o)) || 0),
-                                                0
-                                            );
-                                            const liveCount = ro.length;
-                                            const name = getUserDisplayName(user);
-                                            const addr = getUserAddressSummary(user);
-                                            const created = getUserCreatedAt(user);
-                                            return (
-                                                <tr key={user.id}>
-                                                    <td>
-                                                        <div className="customer-cell">
-                                                            <span className="text-xs text-secondary font-mono">
-                                                                {user.id.length > 14
-                                                                    ? `${user.id.slice(0, 12)}…`
-                                                                    : user.id}
-                                                            </span>
-                                                            <div className="font-semibold">{name || '—'}</div>
-                                                        </div>
-                                                    </td>
-                                                    <td>
-                                                        <div className="contact-cell">
-                                                            <div className="text-xs text-secondary break-all">
-                                                                {getUserEmail(user) || '—'}
-                                                            </div>
-                                                            <div className="text-xs text-secondary">
-                                                                {getUserPhone(user) || '—'}
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                    <td>
-                                                        {liveTotal > 0
-                                                            ? formatRupee(liveTotal)
-                                                            : user.purchases || '—'}
-                                                    </td>
-                                                    <td>{liveCount > 0 ? liveCount : user.ordersCount ?? '—'}</td>
-                                                    <td style={{ maxWidth: '220px' }}>
-                                                        <div className="truncate-2-lines text-xs text-secondary">
-                                                            {addr || '—'}
-                                                        </div>
-                                                    </td>
-                                                    <td className="text-sm">
-                                                        {created ? formatTimestampShort(created) : '—'}
-                                                    </td>
-                                                    <td>
-                                                        <div
-                                                            className="action-btns"
-                                                            style={{ justifyContent: 'flex-end' }}
-                                                        >
-                                                            <button
-                                                                type="button"
-                                                                className="action-btn"
-                                                                title="View"
-                                                                onClick={() => setViewUser(user)}
-                                                            >
-                                                                <Eye size={18} />
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                className="action-btn delete"
-                                                                title="Delete profile document"
-                                                                onClick={() => handleDelete(user.id)}
-                                                            >
-                                                                <Trash2 size={18} />
-                                                            </button>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })}
-                                        {filteredUsers.length === 0 && !loading && (
-                                            <tr>
-                                                <td
-                                                    colSpan="7"
-                                                    style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}
-                                                >
-                                                    No users found in the users collection
-                                                </td>
-                                            </tr>
-                                        )}
-                                    </tbody>
-                                </table>
-                            )}
-                        </div>
-                        {!loading && (
-                            <PaginationBar
-                                totalCount={filteredUsers.length}
-                                pageStart={pageStart}
-                                pageEnd={pageEnd}
-                                currentPage={currentPage}
-                                totalPages={totalPages}
-                                setCurrentPage={setCurrentPage}
-                            />
-                        )}
-                    </div>
-                </div>
+      <main style={styles.main} className="dashboard-main customers-main">
+        {/* Header */}
+        <header style={styles.header} className="dashboard-header customers-header">
+          <div style={styles.headerRow}>
+            <button
+              style={styles.hamburger}
+              className="mobile-hamburger"
+              onClick={() => setIsSidebarOpen(true)}
+            >
+              <FiMenu size={24} color={MAROON} />
+            </button>
+            <h1 style={styles.pageTitle}>Customers</h1>
+          </div>
+          <div style={styles.headerActions} className="dashboard-header-actions">
+            <div style={styles.headerIcons}>
+              <button style={styles.iconButton}><FiSettings /></button>
+              <button style={styles.iconButton}>
+                <span style={styles.notifBadge}>1</span>
+                <FiBell />
+              </button>
+              <img src="https://ui-avatars.com/api/?name=User&background=random" alt="Profile" style={styles.avatar} />
             </div>
+          </div>
+        </header>
 
-            {viewUser && (
-                <div
-                    className="product-view-modal-overlay"
-                    role="dialog"
-                    aria-modal="true"
-                    aria-labelledby="customer-view-title"
-                    onClick={(e) => e.target === e.currentTarget && setViewUser(null)}
-                >
-                    <div className="product-view-modal" style={{ maxWidth: '720px' }}>
-                        <div className="product-view-modal-header">
-                            <div>
-                                <h2 id="customer-view-title" className="product-view-modal-title">
-                                    {getUserDisplayName(viewUser) || 'User'}
-                                </h2>
-                                <p className="text-sm text-slate-500 mt-1 font-mono break-all">{viewUser.id}</p>
-                                {getUserCreatedAt(viewUser) && (
-                                    <p className="text-sm text-slate-500 mt-1">
-                                        Joined {formatTimestamp(getUserCreatedAt(viewUser))}
-                                    </p>
-                                )}
-                            </div>
-                            <button
-                                type="button"
-                                className="product-view-close-btn"
-                                onClick={() => setViewUser(null)}
-                                aria-label="Close"
-                            >
-                                <X size={20} />
-                            </button>
-                        </div>
-                        <div className="product-view-modal-body">
-                            <div
-                                style={{
-                                    display: 'grid',
-                                    gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-                                    gap: '1rem',
-                                    marginBottom: '1.25rem',
-                                }}
-                            >
-                                <div className="p-3 rounded-lg bg-slate-50">
-                                    <div className="text-xs text-slate-500">Total spent (matched orders)</div>
-                                    <div className="text-lg font-semibold">{formatRupee(computedStats.totalSpent)}</div>
-                                </div>
-                                <div className="p-3 rounded-lg bg-slate-50">
-                                    <div className="text-xs text-slate-500">Orders</div>
-                                    <div className="text-lg font-semibold flex items-center gap-1">
-                                        <ShoppingBag size={18} className="text-slate-400" />
-                                        {computedStats.orderCount}
-                                    </div>
-                                </div>
-                                {(viewUser.purchases != null || viewUser.ordersCount != null) && (
-                                    <div className="p-3 rounded-lg bg-slate-50">
-                                        <div className="text-xs text-slate-500">Stored on profile</div>
-                                        <div className="text-sm font-medium">
-                                            {viewUser.purchases != null && <span>{String(viewUser.purchases)} · </span>}
-                                            {viewUser.ordersCount != null && (
-                                                <span>{viewUser.ordersCount} orders</span>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-
-                            <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-                                Contact
-                            </h4>
-                            <dl className="text-sm space-y-2 mb-6">
-                                <div className="flex justify-between gap-4">
-                                    <dt className="text-slate-500">Email</dt>
-                                    <dd className="text-right break-all">{getUserEmail(viewUser) || '—'}</dd>
-                                </div>
-                                <div className="flex justify-between gap-4">
-                                    <dt className="text-slate-500">Phone</dt>
-                                    <dd>{getUserPhone(viewUser) || '—'}</dd>
-                                </div>
-                                <div>
-                                    <dt className="text-slate-500 mb-1">Address</dt>
-                                    <dd className="whitespace-pre-wrap text-slate-800">
-                                        {getUserAddressSummary(viewUser) || '—'}
-                                    </dd>
-                                </div>
-                            </dl>
-
-                            {extraPrimitives.length > 0 && (
-                                <div style={{ marginBottom: '1.25rem' }}>
-                                    <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-                                        Other fields
-                                    </h4>
-                                    <dl className="text-sm space-y-1">
-                                        {extraPrimitives.map(([k, v]) => (
-                                            <div key={k} className="flex justify-between gap-4 border-b border-slate-50 pb-1">
-                                                <dt className="text-slate-500 shrink-0">{k}</dt>
-                                                <dd className="text-right break-all">
-                                                    {v?.toDate ? formatTimestamp(v) : String(v)}
-                                                </dd>
-                                            </div>
-                                        ))}
-                                    </dl>
-                                </div>
-                            )}
-
-                            <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-                                Related orders
-                            </h4>
-                            {relatedOrders.length === 0 ? (
-                                <p className="text-sm text-slate-500 mb-4">
-                                    No orders matched by user id, email, or phone (including nested billing/shipping on
-                                    orders).
-                                </p>
-                            ) : (
-                                <div
-                                    className="data-table-container mb-4"
-                                    style={{ border: '1px solid #e2e8f0', borderRadius: '8px' }}
-                                >
-                                    <table className="data-table" style={{ margin: 0 }}>
-                                        <thead>
-                                            <tr>
-                                                <th>Order</th>
-                                                <th>Total</th>
-                                                <th>Status</th>
-                                                <th>Date</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {relatedOrders.slice(0, 25).map((o) => (
-                                                <tr key={o.id}>
-                                                    <td>
-                                                        <button
-                                                            type="button"
-                                                            className="customer-related-order-id"
-                                                            onClick={() => openRelatedOrderInvoiceOrDetails(o)}
-                                                            title={
-                                                                o.invoiceUrl
-                                                                    ? 'Open invoice PDF'
-                                                                    : 'View order (opens Orders page)'
-                                                            }
-                                                        >
-                                                            #{o.id.slice(0, 10)}…
-                                                        </button>
-                                                    </td>
-                                                    <td>{formatRupee(getOrderTotalValue(o))}</td>
-                                                    <td>{o.status || '—'}</td>
-                                                    <td className="text-xs">{formatTimestamp(o.createdAt)}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                    {relatedOrders.length > 25 && (
-                                        <p className="text-xs text-slate-500 p-2">
-                                            Showing 25 of {relatedOrders.length} orders.
-                                        </p>
-                                    )}
-                                </div>
-                            )}
-
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
-                                <button type="button" className="btn-secondary" onClick={() => setViewUser(null)}>
-                                    Close
-                                </button>
-                                <button
-                                    type="button"
-                                    className="btn-secondary"
-                                    style={{ color: '#b91c1c', borderColor: '#fecaca' }}
-                                    onClick={() => handleDelete(viewUser.id)}
-                                >
-                                    Delete profile
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
+        {/* Filters & Add Customer */}
+        <div style={styles.toolbar} className="customers-toolbar">
+          <div style={styles.filters}>
+            <div style={styles.selectWrap}>
+              <FiFilter style={styles.selectIcon} />
+              <select style={styles.select} className="filter-select">
+                <option>Plan</option>
+              </select>
+            </div>
+            <div style={styles.selectWrap}>
+              <FiFilter style={styles.selectIcon} />
+              <select style={styles.select} className="filter-select">
+                <option>All Status</option>
+              </select>
+            </div>
+            <button style={styles.filterIconBtn} aria-label="Search"><FiSearch /></button>
+            <button style={styles.filterIconBtn} aria-label="Filter"><FiFilter /></button>
+          </div>
+          <button type="button" style={styles.addBtn} className="add-btn" onClick={() => setShowAddModal(true)}>+ Add Customer</button>
         </div>
-    );
+
+        {/* Table action menu (portal, outside table) */}
+        <ActionMenu
+          isOpen={!!openActionId}
+          onClose={() => { setOpenActionId(null); setActionAnchorEl(null); }}
+          anchorEl={actionAnchorEl}
+          busy={deleting}
+          onView={() => { const row = customers.find((r) => r.id === openActionId); if (row) handleView(row); }}
+          onEdit={() => { const row = customers.find((r) => r.id === openActionId); if (row) handleEdit(row); }}
+          onDelete={() => { const row = customers.find((r) => r.id === openActionId); if (row) return handleDelete(row); }}
+        />
+
+        {/* Table - desktop */}
+        <div style={styles.tableWrap} className="customers-table-wrap">
+          <table style={styles.table} className="customers-table">
+            <thead>
+              <tr>
+                <th style={styles.th}><span className="th-content">S.NO <MdKeyboardArrowUp size={14} /><MdKeyboardArrowDown size={14} /></span></th>
+                <th style={styles.th}><span className="th-content">Cus ID <MdKeyboardArrowUp size={14} /><MdKeyboardArrowDown size={14} /></span></th>
+                <th style={styles.th}><span className="th-content">Joined Date <MdKeyboardArrowUp size={14} /><MdKeyboardArrowDown size={14} /></span></th>
+                <th style={styles.th}><span className="th-content">Name <MdKeyboardArrowUp size={14} /><MdKeyboardArrowDown size={14} /></span></th>
+                <th style={styles.th}><span className="th-content">Password <MdKeyboardArrowUp size={14} /><MdKeyboardArrowDown size={14} /></span></th>
+                <th style={styles.th}><span className="th-content">Amount <MdKeyboardArrowUp size={14} /><MdKeyboardArrowDown size={14} /></span></th>
+                <th style={styles.th}><span className="th-content">Plan <MdKeyboardArrowUp size={14} /><MdKeyboardArrowDown size={14} /></span></th>
+                <th style={styles.th}><span className="th-content">Mobile Number <MdKeyboardArrowUp size={14} /><MdKeyboardArrowDown size={14} /></span></th>
+                <th style={styles.th}>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(loading ? [] : customers).map((row) => (
+                <tr key={row.id || row.sno} style={styles.tr}>
+                  <td style={styles.td}>{row.sno}</td>
+                  <td style={styles.td}>{row.cusId}</td>
+                  <td style={styles.td}>{formatToIST(row.joinedDate)}</td>
+                  <td style={styles.td}>{row.name}</td>
+                  <td style={styles.td}>{row.password}</td>
+                  <td style={styles.td}>₹ {row.amount}</td>
+                  <td style={styles.td}>{row.plan}</td>
+                  <td style={styles.td}>{row.mobile}</td>
+                  <td style={styles.tdAction}>
+                    <div style={styles.actionCellWrap}>
+                      <button
+                        type="button"
+                        style={styles.actionTrigger}
+                        onClick={(e) => {
+                          const id = row.id;
+                          setOpenActionId(openActionId === id ? null : id);
+                          setActionAnchorEl(openActionId === id ? null : e.currentTarget);
+                        }}
+                        aria-haspopup="true"
+                        aria-expanded={openActionId === row.id}
+                      >
+                        View More
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Card action menu (portal) */}
+        <ActionMenu
+          isOpen={!!openCardActionId}
+          onClose={() => { setOpenCardActionId(null); setCardActionAnchorEl(null); }}
+          anchorEl={cardActionAnchorEl}
+          busy={deleting}
+          onView={() => { const row = customers.find((r) => r.id === openCardActionId); if (row) handleView(row); }}
+          onEdit={() => { const row = customers.find((r) => r.id === openCardActionId); if (row) handleEdit(row); }}
+          onDelete={() => { const row = customers.find((r) => r.id === openCardActionId); if (row) return handleDelete(row); }}
+        />
+
+        {/* Cards - mobile only (hidden on desktop) */}
+        <div className="customers-cards" style={styles.cardsWrap}>
+          {(loading ? [] : customers).map((row) => (
+            <div key={row.id || row.sno} style={styles.card} className="customer-card">
+              <div style={styles.cardRow}><span style={styles.cardLabel}>S.NO</span><span>{row.sno}</span></div>
+              <div style={styles.cardRow}><span style={styles.cardLabel}>Cus ID</span><span>{row.cusId}</span></div>
+              <div style={styles.cardRow}><span style={styles.cardLabel}>Joined Date</span><span>{formatToIST(row.joinedDate)}</span></div>
+              <div style={styles.cardRow}><span style={styles.cardLabel}>Name</span><span>{row.name}</span></div>
+              <div style={styles.cardRow}><span style={styles.cardLabel}>Amount</span><span>₹ {row.amount}</span></div>
+              <div style={styles.cardRow}><span style={styles.cardLabel}>Plan</span><span>{row.plan}</span></div>
+              <div style={styles.cardRow}><span style={styles.cardLabel}>Mobile</span><span>{row.mobile}</span></div>
+              <div style={styles.cardActionWrap}>
+                <button
+                  type="button"
+                  style={styles.actionTrigger}
+                  onClick={(e) => {
+                    const id = row.id;
+                    setOpenCardActionId(openCardActionId === id ? null : id);
+                    setCardActionAnchorEl(openCardActionId === id ? null : e.currentTarget);
+                  }}
+                >
+                  View More
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {loading && <p style={{ marginBottom: 16, color: '#666' }}>Loading customers…</p>}
+
+        {/* Pagination */}
+        <div style={styles.pagination} className="customers-pagination">
+          <span style={styles.pageInfo}>Showing page {currentPage} / {totalPages}</span>
+          <div style={styles.paginationControls} className="pagination-controls">
+            <button
+              style={styles.pagBtn}
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            >
+              Previous
+            </button>
+            <button
+              style={{ ...styles.pagBtn, ...(currentPage === 1 ? styles.pagBtnActive : {}) }}
+              onClick={() => setCurrentPage(1)}
+            >
+              1
+            </button>
+            <button
+              style={{ ...styles.pagBtn, ...(currentPage === 2 ? styles.pagBtnActive : {}) }}
+              onClick={() => setCurrentPage(2)}
+            >
+              2
+            </button>
+            <button
+              style={{ ...styles.pagBtn, ...(currentPage === 3 ? styles.pagBtnActive : {}) }}
+              onClick={() => setCurrentPage(3)}
+            >
+              3
+            </button>
+            <button style={styles.pagBtn}>...</button>
+            <button
+              style={styles.pagBtn}
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+};
+
+const styles = {
+  container: {
+    display: 'flex',
+    minHeight: '100vh',
+    backgroundColor: '#fff',
+  },
+  main: {
+    marginLeft: '260px',
+    flex: 1,
+    padding: '24px 40px',
+    backgroundColor: '#fff',
+    maxWidth: '100vw',
+    transition: 'margin-left 0.3s ease',
+  },
+  header: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '24px',
+    gap: '20px',
+    flexWrap: 'wrap',
+  },
+  headerRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+  },
+  pageTitle: {
+    fontSize: '28px',
+    color: MAROON,
+    fontWeight: '700',
+  },
+  headerActions: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '16px',
+    flexWrap: 'wrap',
+  },
+  searchContainer: {
+    position: 'relative',
+    backgroundColor: LIGHT_GRAY,
+    borderRadius: '24px',
+    padding: '10px 16px',
+    display: 'flex',
+    alignItems: 'center',
+    width: '300px',
+  },
+  searchIcon: {
+    color: '#999',
+    marginRight: '8px',
+    fontSize: '18px',
+  },
+  searchInput: {
+    border: 'none',
+    background: 'transparent',
+    outline: 'none',
+    fontSize: '14px',
+    width: '100%',
+    color: '#333',
+  },
+  headerIcons: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+  },
+  iconButton: {
+    width: '40px',
+    height: '40px',
+    borderRadius: '50%',
+    backgroundColor: LIGHT_GRAY,
+    border: 'none',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    color: '#666',
+    fontSize: '18px',
+    position: 'relative',
+  },
+  notifBadge: {
+    position: 'absolute',
+    top: '6px',
+    right: '8px',
+    minWidth: '16px',
+    height: '16px',
+    borderRadius: '50%',
+    backgroundColor: '#ff4444',
+    color: '#fff',
+    fontSize: '10px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '0 4px',
+  },
+  avatar: {
+    width: '45px',
+    height: '45px',
+    borderRadius: '50%',
+    objectFit: 'cover',
+    boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
+  },
+  toolbar: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '20px',
+    gap: '16px',
+    flexWrap: 'wrap',
+  },
+  filters: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    flexWrap: 'wrap',
+  },
+  selectWrap: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    backgroundColor: LIGHT_GRAY,
+    borderRadius: '8px',
+    padding: '0 4px 0 12px',
+  },
+  selectIcon: {
+    color: '#666',
+    fontSize: '16px',
+  },
+  select: {
+    backgroundColor: 'transparent',
+    border: 'none',
+    borderRadius: '0',
+    padding: '10px 14px 10px 4px',
+    fontSize: '14px',
+    color: '#333',
+    cursor: 'pointer',
+    minWidth: '100px',
+  },
+  filterIconBtn: {
+    width: '40px',
+    height: '40px',
+    borderRadius: '8px',
+    backgroundColor: LIGHT_GRAY,
+    border: 'none',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    color: '#666',
+    fontSize: '18px',
+  },
+  addBtn: {
+    backgroundColor: MAROON,
+    color: '#fff',
+    border: 'none',
+    borderRadius: '8px',
+    padding: '12px 20px',
+    fontSize: '15px',
+    fontWeight: '600',
+    cursor: 'pointer',
+  },
+  tableWrap: {
+    overflowX: 'auto',
+    marginBottom: '20px',
+    border: `1px solid ${BORDER_GRAY}`,
+    borderRadius: '8px',
+  },
+  table: {
+    width: '100%',
+    borderCollapse: 'collapse',
+    minWidth: '900px',
+  },
+  th: {
+    textAlign: 'left',
+    padding: '14px 16px',
+    fontSize: '14px',
+    fontWeight: '600',
+    color: '#333',
+    backgroundColor: '#fafafa',
+    borderBottom: `1px solid ${BORDER_GRAY}`,
+  },
+  tr: {
+    borderBottom: `1px solid ${BORDER_GRAY}`,
+  },
+  td: {
+    padding: '14px 16px',
+    fontSize: '14px',
+    color: '#333',
+  },
+  tdAction: {
+    padding: '14px 16px',
+    fontSize: '14px',
+    position: 'relative',
+  },
+  actionCellWrap: {
+    position: 'relative',
+    display: 'inline-block',
+  },
+  actionTrigger: {
+    color: MAROON,
+    fontWeight: '500',
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    padding: 0,
+    fontSize: '14px',
+  },
+  actionDropdown: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    marginTop: '4px',
+    minWidth: '120px',
+    backgroundColor: '#fafafa',
+    border: `1px solid ${BORDER_GRAY}`,
+    borderRadius: '8px',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+    padding: '8px 0',
+    zIndex: 50,
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  actionDropdownPos: {},
+  actionDropdownPosCard: {
+    top: 'auto',
+    bottom: '100%',
+    marginTop: 0,
+    marginBottom: '4px',
+  },
+  actionItem: {
+    display: 'block',
+    width: '100%',
+    textAlign: 'left',
+    padding: '10px 16px',
+    border: 'none',
+    background: 'none',
+    cursor: 'pointer',
+    fontSize: '14px',
+    color: '#333',
+  },
+  cardActionWrap: {
+    position: 'relative',
+    marginTop: '12px',
+    display: 'inline-block',
+  },
+  cardsWrap: {
+    display: 'none',
+  },
+  card: {
+    border: `1px solid ${BORDER_GRAY}`,
+    borderRadius: '8px',
+    padding: '16px',
+    marginBottom: '12px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+  },
+  cardRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    fontSize: '14px',
+  },
+  cardLabel: {
+    color: '#666',
+    marginRight: '8px',
+  },
+  pagination: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: '16px',
+  },
+  pageInfo: {
+    fontSize: '14px',
+    color: '#333',
+  },
+  paginationControls: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    flexWrap: 'wrap',
+  },
+  pagBtn: {
+    padding: '8px 14px',
+    borderRadius: '8px',
+    border: 'none',
+    backgroundColor: LIGHT_GRAY,
+    color: '#333',
+    fontSize: '14px',
+    cursor: 'pointer',
+    minWidth: '36px',
+  },
+  pagBtnActive: {
+    backgroundColor: MAROON,
+    color: '#fff',
+  },
+  hamburger: {
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    display: 'none',
+    padding: 0,
+  },
+
+  modalOverlay: { position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: '20px' },
+  modalBox: { backgroundColor: '#fff', borderRadius: '12px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)', maxWidth: '480px', width: '100%', maxHeight: '90vh', overflow: 'auto' },
+  modalHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: `1px solid ${BORDER_GRAY}` },
+  modalTitle: { fontSize: '20px', fontWeight: '700', color: '#1f2937', margin: 0 },
+  modalClose: { background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: '#666', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  form: { padding: '24px' },
+  formGroup: { marginBottom: '16px' },
+  formLabel: { display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' },
+  formInput: { width: '100%', padding: '10px 14px', borderRadius: '8px', border: `1px solid ${BORDER_GRAY}`, fontSize: '14px', color: '#333', boxSizing: 'border-box' },
+  formSelect: { width: '100%', padding: '10px 14px', borderRadius: '8px', border: `1px solid ${BORDER_GRAY}`, fontSize: '14px', color: '#333', backgroundColor: '#fff', cursor: 'pointer', boxSizing: 'border-box' },
+  modalFooter: { display: 'flex', justifyContent: 'flex-end', gap: '12px', paddingTop: '20px', marginTop: '8px', borderTop: `1px solid ${BORDER_GRAY}` },
+  modalBtnCancel: { padding: '10px 20px', borderRadius: '8px', border: '1px solid #9ca3af', backgroundColor: '#fff', color: '#374151', fontSize: '14px', fontWeight: '500', cursor: 'pointer' },
+  modalBtnPrimary: { padding: '10px 20px', borderRadius: '8px', border: 'none', backgroundColor: MAROON, color: '#fff', fontSize: '14px', fontWeight: '500', cursor: 'pointer' },
+  viewOverlay: { position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: '20px' },
+  viewPanel: { backgroundColor: '#fff', borderRadius: '12px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)', maxWidth: '520px', width: '100%', maxHeight: '90vh', overflow: 'auto' },
+  modalBody: { padding: '24px' },
+  modalSectionTitle: { fontSize: '16px', fontWeight: '700', color: MAROON, marginBottom: '16px' },
+  modalDetails: { display: 'flex', flexDirection: 'column', gap: '12px' },
+  modalRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', fontSize: '14px' },
+  modalLabel: { fontWeight: '500', color: '#4b5563' },
+  modalValue: { fontWeight: '700', color: '#111', textAlign: 'right' },
 };
 
 export default Customers;
