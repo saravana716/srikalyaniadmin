@@ -2,7 +2,7 @@ import React from 'react';
 
 const VARIANTS = {
   primary: {
-    backgroundColor: '#801A39',
+    backgroundColor: '#e03467ff',
     color: '#fff',
     border: 'none',
   },
