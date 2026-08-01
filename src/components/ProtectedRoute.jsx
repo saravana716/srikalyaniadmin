@@ -1,23 +1,15 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
 
 const ProtectedRoute = ({ children }) => {
-  const { isAuthenticated, loading } = useAuth();
+    const adminUser = localStorage.getItem('admin_user');
 
-  if (loading) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', color: '#666' }}>
-        Loading…
-      </div>
-    );
-  }
+    if (!adminUser) {
+        // Redirect to login if no admin session exists
+        return <Navigate to="/login" replace />;
+    }
 
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
-
-  return children;
+    return children;
 };
 
 export default ProtectedRoute;
