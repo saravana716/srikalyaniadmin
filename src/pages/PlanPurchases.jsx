@@ -9,10 +9,16 @@ import {
   addPlanPurchase as addPlanPurchaseToDb,
   updatePlanPurchase as updatePlanPurchaseInDb,
   deletePlanPurchase as deletePlanPurchaseFromDb,
+  cancelPlanPurchase as cancelPlanPurchaseInDb,
 } from '../services/planPurchasesService';
 import { subscribeCustomers } from '../services/customersService';
 import { subscribePlans } from '../services/plansService';
 import PlanPurchaseDetailModal from '../components/PlanPurchaseDetailModal';
+import CancelChitModal from '../components/CancelChitModal';
+import { formatINR } from '../utils/currencyUtils';
+import { uploadCancelChitForm } from '../utils/uploadImage';
+import { useLatestMetalRates } from '../hooks/useLatestMetalRates';
+import { parseMoneyAmount, formatSavedWeightForDisplay } from '../utils/weightUtils';
 
 const MAROON = '#801A39';
 const LIGHT_GRAY = '#F0F0F0';
@@ -114,11 +120,12 @@ const AddEditPlanPurchaseModal = ({ planPurchase, onClose, onSave, error, custom
               <option value="Active">Active</option>
               <option value="Inactive">Inactive</option>
               <option value="Completed">Completed</option>
+              <option value="Cancelled">Cancelled</option>
             </select>
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 20 }}>
-            <Button type="button" variant="secondary" onClick={onClose} disabled={saving} style={styles.modalBtnCancel}>Cancel</Button>
-            <Button type="submit" loading={saving} loadingText={isEdit ? 'Updating…' : 'Adding…'} style={styles.modalBtnPrimary}>
+            <Button type="button" variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button>
+            <Button type="submit" loading={saving} loadingText={isEdit ? 'Updating…' : 'Adding…'}>
               {isEdit ? 'Update' : 'Add Plan Purchase'}
             </Button>
           </div>
@@ -141,10 +148,14 @@ const PlanPurchases = () => {
   const [saveError, setSaveError] = useState(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [cancelRow, setCancelRow] = useState(null);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState(null);
   const [list, setList] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { rates } = useLatestMetalRates();
   const totalPages = Math.max(1, Math.ceil(list.length / 10));
 
   useEffect(() => {
@@ -204,6 +215,41 @@ const PlanPurchases = () => {
     }
   };
 
+  const openCancelChit = (row) => {
+    if (!row) return;
+    if (String(row.status || '').toLowerCase() === 'cancelled') {
+      alert('This chit is already cancelled.');
+      return;
+    }
+    setOpenActionId(null);
+    setOpenCardActionId(null);
+    setActionAnchorEl(null);
+    setCardActionAnchorEl(null);
+    setCancelError(null);
+    setCancelRow(row);
+  };
+
+  const handleCancelChit = async (cancelData) => {
+    if (!cancelRow?.id) return;
+    setCancelError(null);
+    setCancelling(true);
+    try {
+      const { signedFormFile, ...fields } = cancelData || {};
+      const signedCancelFormUrl = await uploadCancelChitForm(signedFormFile, cancelRow.id);
+      await cancelPlanPurchaseInDb(cancelRow.id, {
+        ...fields,
+        signedCancelFormUrl,
+      });
+      setCancelRow(null);
+      setViewModalRow(null);
+    } catch (e) {
+      console.error('Cancel chit failed', e);
+      setCancelError(e?.message || 'Failed to cancel chit');
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   return (
     <div style={styles.container} className="dashboard-container plan-purchases-page">
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
@@ -211,7 +257,20 @@ const PlanPurchases = () => {
         <div className="sidebar-overlay" onClick={() => setIsSidebarOpen(false)} />
       )}
       {viewModalRow && (
-        <PlanPurchaseDetailModal row={viewModalRow} onClose={() => setViewModalRow(null)} />
+        <PlanPurchaseDetailModal
+          row={viewModalRow}
+          onClose={() => setViewModalRow(null)}
+          onCancelChit={() => openCancelChit(viewModalRow)}
+        />
+      )}
+      {cancelRow && (
+        <CancelChitModal
+          planPurchase={cancelRow}
+          onClose={() => { if (!cancelling) { setCancelRow(null); setCancelError(null); } }}
+          onSubmit={handleCancelChit}
+          saving={cancelling}
+          error={cancelError}
+        />
       )}
 
       {showAddModal && (
@@ -245,7 +304,7 @@ const PlanPurchases = () => {
             <h1 style={styles.pageTitle}>Plan Purchases</h1>
           </div>
           <div style={styles.headerActions} className="dashboard-header-actions">
-            <button type="button" style={styles.addBtn} onClick={() => setShowAddModal(true)}>+ Add Plan Purchase</button>
+            <Button type="button" onClick={() => setShowAddModal(true)}>+ Add Plan Purchase</Button>
             <div style={styles.headerIcons}>
               <button style={styles.iconButton}><FiSettings /></button>
               <button style={styles.iconButton}>
@@ -261,18 +320,20 @@ const PlanPurchases = () => {
           isOpen={!!openActionId}
           onClose={() => { setOpenActionId(null); setActionAnchorEl(null); }}
           anchorEl={actionAnchorEl}
-          busy={deleting}
+          busy={deleting || cancelling}
           onView={() => { const row = list.find((r) => r.id === openActionId); if (row) handleView(row); }}
           onEdit={() => { const row = list.find((r) => r.id === openActionId); if (row) handleEdit(row); }}
+          onCancelChit={() => { const row = list.find((r) => r.id === openActionId); if (row) openCancelChit(row); }}
           onDelete={() => { const row = list.find((r) => r.id === openActionId); if (row) return handleDelete(row); }}
         />
         <ActionMenu
           isOpen={!!openCardActionId}
           onClose={() => { setOpenCardActionId(null); setCardActionAnchorEl(null); }}
           anchorEl={cardActionAnchorEl}
-          busy={deleting}
+          busy={deleting || cancelling}
           onView={() => { const row = list.find((r) => r.id === openCardActionId); if (row) handleView(row); }}
           onEdit={() => { const row = list.find((r) => r.id === openCardActionId); if (row) handleEdit(row); }}
+          onCancelChit={() => { const row = list.find((r) => r.id === openCardActionId); if (row) openCancelChit(row); }}
           onDelete={() => { const row = list.find((r) => r.id === openCardActionId); if (row) return handleDelete(row); }}
         />
 
@@ -285,6 +346,7 @@ const PlanPurchases = () => {
                 <th style={styles.th}><span className="th-content">Mobile <MdKeyboardArrowUp size={14} /><MdKeyboardArrowDown size={14} /></span></th>
                 <th style={styles.th}><span className="th-content">Plan <MdKeyboardArrowUp size={14} /><MdKeyboardArrowDown size={14} /></span></th>
                 <th style={styles.th}><span className="th-content">Amount <MdKeyboardArrowUp size={14} /><MdKeyboardArrowDown size={14} /></span></th>
+                <th style={styles.th}><span className="th-content">Saved Weight <MdKeyboardArrowUp size={14} /><MdKeyboardArrowDown size={14} /></span></th>
                 <th style={styles.th}><span className="th-content">Status <MdKeyboardArrowUp size={14} /><MdKeyboardArrowDown size={14} /></span></th>
                 <th style={styles.th}>Action</th>
               </tr>
@@ -296,9 +358,20 @@ const PlanPurchases = () => {
                   <td style={styles.td}>{row.name || row.customerName || 'N/A'}</td>
                   <td style={styles.td}>{row.mobile || 'N/A'}</td>
                   <td style={styles.td}>{row.planName || 'N/A'}</td>
-                  <td style={styles.td}>₹{row.amount || 0}</td>
+                  <td style={styles.td}>{formatINR(row.amount || 0)}</td>
                   <td style={styles.td}>
-                    <span style={row.status === 'Active' ? styles.badgeActive : styles.badgeInactive}>{row.status || 'Inactive'}</span>
+                    {formatSavedWeightForDisplay(
+                      parseMoneyAmount(row.savedAmount ?? row.amount),
+                      rates,
+                      row
+                    )}
+                  </td>
+                  <td style={styles.td}>
+                    <span style={
+                      String(row.status || '').toLowerCase() === 'active' ? styles.badgeActive
+                        : ['cancelled', 'closed'].includes(String(row.status || '').toLowerCase()) ? styles.badgeCancelled
+                          : styles.badgeInactive
+                    }>{row.status || 'Inactive'}</span>
                   </td>
                   <td style={styles.tdAction}>
                     <div style={styles.actionCellWrap}>
@@ -365,6 +438,7 @@ const styles = {
   td: { padding: '14px 16px', fontSize: '14px', color: '#333' },
   badgeActive: { display: 'inline-block', padding: '4px 12px', borderRadius: '6px', backgroundColor: '#16a34a', color: '#fff', fontSize: '13px', fontWeight: '500' },
   badgeInactive: { display: 'inline-block', padding: '4px 12px', borderRadius: '6px', backgroundColor: '#dc2626', color: '#fff', fontSize: '13px', fontWeight: '500' },
+  badgeCancelled: { display: 'inline-block', padding: '4px 12px', borderRadius: '6px', backgroundColor: '#b45309', color: '#fff', fontSize: '13px', fontWeight: '500' },
   tdAction: { padding: '14px 16px', fontSize: '14px', position: 'relative' },
   actionCellWrap: { position: 'relative', display: 'inline-flex', alignItems: 'center', gap: '4px' },
   actionTrigger: { color: MAROON, fontWeight: '500', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: '14px', marginRight: '4px' },

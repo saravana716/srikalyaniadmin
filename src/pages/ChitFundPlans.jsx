@@ -39,9 +39,9 @@ const ViewMoreModal = ({ plan, onClose, onReminder, onNotification }) => {
             ))}
           </div>
         </div>
-        <div style={styles.modalFooter} className="view-more-modal-footer">
-          <button type="button" style={styles.modalBtnReminder} onClick={onReminder}>Reminder</button>
-          <button type="button" style={styles.modalBtnNotification} onClick={onNotification}>Notification</button>
+        <div style={styles.modalFooter} className="view-more-modal-footer app-modal-footer">
+          <Button type="button" variant="secondary" onClick={onReminder}>Reminder</Button>
+          <Button type="button" onClick={onNotification}>Notification</Button>
         </div>
       </div>
     </div>
@@ -106,8 +106,8 @@ const AddEditPlanModal = ({ plan, onClose, onSave, error, saving }) => {
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} style={{ ...styles.formInput, minHeight: 90 }} placeholder="e.g. Pay for Daily, get gold" required />
           </div>
           <div style={styles.modalFooterForm} className="add-edit-plan-modal-footer">
-            <Button type="button" variant="secondary" onClick={onClose} disabled={saving} style={styles.modalBtnCancel}>Cancel</Button>
-            <Button type="submit" loading={saving} loadingText={isEdit ? 'Updating…' : 'Adding…'} style={styles.modalBtnPrimary}>
+            <Button type="button" variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button>
+            <Button type="submit" loading={saving} loadingText={isEdit ? 'Updating…' : 'Adding…'}>
               {isEdit ? 'Update Plan' : 'Add Plan'}
             </Button>
           </div>
@@ -266,7 +266,7 @@ const ChitFundPlans = () => {
 
         {/* Add Plan button */}
         <div style={styles.toolbar} className="plans-toolbar">
-          <button type="button" style={styles.addPlanBtn} className="add-plan-btn" onClick={() => { setEditingPlan(null); setShowPlanModal(true); }}>+ Add Plan</button>
+          <Button type="button" onClick={() => { setEditingPlan(null); setShowPlanModal(true); }}>+ Add Plan</Button>
         </div>
 
         {/* Table - desktop */}

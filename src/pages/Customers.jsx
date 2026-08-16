@@ -1,15 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Sidebar from '../components/Sidebar';
 import ActionMenu from '../components/ActionMenu';
 import Button from '../components/Button';
 import { FiSearch, FiSettings, FiBell, FiMenu, FiFilter, FiX } from 'react-icons/fi';
 import { MdKeyboardArrowUp, MdKeyboardArrowDown } from 'react-icons/md';
-import { subscribeCustomers, addCustomer as addCustomerToDb, updateCustomer as updateCustomerInDb, deleteCustomer as deleteCustomerFromDb } from '../services/customersService';
+import { subscribeCustomers, addCustomer as addCustomerToDb, updateCustomer as updateCustomerInDb, deleteCustomer as deleteCustomerFromDb, creditCustomerAccount, subscribeCustomerLedger } from '../services/customersService';
 import { formatToIST } from '../utils/dateUtils';
+import { formatINR } from '../utils/currencyUtils';
+import AddFundsModal from '../components/AddFundsModal';
+import { useLatestMetalRates } from '../hooks/useLatestMetalRates';
+import { formatSavedWeightForDisplay, savedWeightMeta } from '../utils/weightUtils';
 
 const MAROON = '#801A39';
 const LIGHT_GRAY = '#F0F0F0';
 const BORDER_GRAY = '#e0e0e0';
+const PAGE_SIZE = 10;
+const DEFAULT_PLANS = ['Daily', 'Weekly', 'Monthly'];
 
 const AddEditCustomerModal = ({ customer, onClose, onSave, error, saving }) => {
   const isEdit = !!customer;
@@ -57,8 +63,8 @@ const AddEditCustomerModal = ({ customer, onClose, onSave, error, saving }) => {
             <input type="text" value={password} onChange={(e) => setPassword(e.target.value)} style={styles.formInput} placeholder="Enter password" required />
           </div>
           <div style={styles.formGroup}>
-            <label style={styles.formLabel}>Amount (₹)</label>
-            <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} style={styles.formInput} placeholder="Enter amount" min="0" />
+            <label style={styles.formLabel}>Account Amount (₹)</label>
+            <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} style={styles.formInput} placeholder="Opening / account balance" min="0" />
           </div>
           <div style={styles.formGroup}>
             <label style={styles.formLabel}>Plan</label>
@@ -70,15 +76,25 @@ const AddEditCustomerModal = ({ customer, onClose, onSave, error, saving }) => {
           </div>
           <div style={styles.formGroup}>
             <label style={styles.formLabel}>Mobile Number</label>
-            <input type="tel" value={mobile} onChange={(e) => setMobile(e.target.value)} style={styles.formInput} placeholder="Enter mobile number" required />
+            <input
+              type="tel"
+              value={mobile}
+              onChange={(e) => setMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+              style={styles.formInput}
+              placeholder="Enter 10-digit mobile number"
+              required
+              maxLength={10}
+              inputMode="numeric"
+              pattern="[0-9]{10}"
+              title="Enter a 10-digit mobile number"
+            />
           </div>
           <div style={styles.modalFooter} className="add-customer-modal-footer">
-            <Button type="button" variant="secondary" onClick={onClose} disabled={saving} style={styles.modalBtnCancel}>Cancel</Button>
+            <Button type="button" variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button>
             <Button
               type="submit"
               loading={saving}
               loadingText={isEdit ? 'Updating…' : 'Adding…'}
-              style={styles.modalBtnPrimary}
             >
               {isEdit ? 'Update Customer' : 'Add Customer'}
             </Button>
@@ -89,18 +105,41 @@ const AddEditCustomerModal = ({ customer, onClose, onSave, error, saving }) => {
   );
 };
 
-const ViewCustomerModal = ({ customer, onClose, onEdit }) => {
+const ViewCustomerModal = ({ customer, onClose, onEdit, onAddFunds }) => {
+  const [ledger, setLedger] = useState([]);
+  const { rates } = useLatestMetalRates();
+
+  useEffect(() => {
+    if (!customer?.id) return undefined;
+    return subscribeCustomerLedger(customer.id, setLedger);
+  }, [customer?.id]);
+
   if (!customer) return null;
 
+  const balance = customer.accountBalance ?? customer.amount ?? 0;
+  const weightInfo = savedWeightMeta(balance, rates, customer);
   const rows = [
     { label: 'Customer ID:', value: customer.cusId || '—' },
     { label: 'Joined Date (IST):', value: formatToIST(customer.joinedDate) },
     { label: 'Name:', value: customer.name },
     { label: 'Password:', value: customer.password },
-    { label: 'Amount:', value: `₹ ${customer.amount ?? 0}` },
+    { label: 'Account Balance:', value: formatINR(balance) },
+    {
+      label: 'Saved Weight:',
+      value: weightInfo.ratePerGram
+        ? `${weightInfo.label} (${weightInfo.hint})`
+        : weightInfo.hint,
+    },
     { label: 'Plan:', value: customer.plan },
     { label: 'Mobile Number:', value: customer.mobile },
+    { label: 'Last Payment Mode:', value: customer.lastPaymentMode || '—' },
   ];
+
+  const formatLedgerTime = (ts) => {
+    if (!ts) return '—';
+    if (typeof ts?.toDate === 'function') return formatToIST(ts.toDate().toISOString());
+    return formatToIST(ts);
+  };
 
   return (
     <div style={styles.viewOverlay} className="view-more-modal-overlay" onClick={onClose}>
@@ -121,10 +160,33 @@ const ViewCustomerModal = ({ customer, onClose, onEdit }) => {
               </div>
             ))}
           </div>
+
+          <h3 style={{ ...styles.modalSectionTitle, marginTop: 24 }}>Add Cash History</h3>
+          {ledger.length === 0 ? (
+            <p style={{ color: '#6b7280', fontSize: 14, margin: 0 }}>No cash additions yet.</p>
+          ) : (
+            <div style={styles.ledgerList}>
+              {ledger.map((entry) => (
+                <div key={entry.id} style={styles.ledgerItem}>
+                  <div style={styles.ledgerTop}>
+                    <strong style={{ color: '#16a34a' }}>+ {formatINR(entry.amount)}</strong>
+                    <span style={styles.ledgerMode}>{entry.paymentMode || 'Cash'}</span>
+                  </div>
+                  <div style={styles.ledgerMeta}>
+                    {formatLedgerTime(entry.createdAt)}
+                    {entry.planName ? ` · ${entry.planName}` : ''}
+                    {entry.balanceAfter != null ? ` · Bal ${formatINR(entry.balanceAfter)}` : ''}
+                  </div>
+                  {entry.note ? <div style={styles.ledgerNote}>{entry.note}</div> : null}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-        <div style={styles.modalFooter}>
-          <Button type="button" variant="secondary" onClick={onClose} style={styles.modalBtnCancel}>Close</Button>
-          <Button type="button" onClick={() => { onClose(); onEdit(customer); }} style={styles.modalBtnPrimary}>Edit</Button>
+        <div style={styles.modalFooter} className="app-modal-footer">
+          <Button type="button" variant="secondary" onClick={onClose}>Close</Button>
+          <Button type="button" onClick={() => { onClose(); onAddFunds?.(customer); }}>Add Cash / Account</Button>
+          <Button type="button" onClick={() => { onClose(); onEdit(customer); }}>Edit</Button>
         </div>
       </div>
     </div>
@@ -146,7 +208,14 @@ const Customers = () => {
   const [saveError, setSaveError] = useState(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const totalPages = Math.max(1, Math.ceil(customers.length / 10));
+  const [fundsCustomer, setFundsCustomer] = useState(null);
+  const [fundsSaving, setFundsSaving] = useState(false);
+  const [fundsError, setFundsError] = useState(null);
+  const [filterPlan, setFilterPlan] = useState('all');
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const { rates } = useLatestMetalRates();
 
   useEffect(() => {
     const unsub = subscribeCustomers((list) => {
@@ -155,6 +224,50 @@ const Customers = () => {
     });
     return () => unsub();
   }, []);
+
+  const planOptions = useMemo(() => {
+    const set = new Set(DEFAULT_PLANS);
+    customers.forEach((c) => {
+      if (c.plan && String(c.plan).trim()) set.add(String(c.plan).trim());
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [customers]);
+
+  const filteredCustomers = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return customers
+      .filter((c) => {
+        if (filterPlan !== 'all' && String(c.plan || '') !== filterPlan) return false;
+
+        const bal = Number(c.accountBalance ?? c.amount ?? 0) || 0;
+        if (filterStatus === 'active' && bal <= 0) return false;
+        if (filterStatus === 'inactive' && bal > 0) return false;
+
+        if (q) {
+          const hay = [c.name, c.mobile, c.cusId, c.plan, c.password]
+            .map((x) => String(x || '').toLowerCase())
+            .join(' ');
+          if (!hay.includes(q)) return false;
+        }
+        return true;
+      })
+      .map((row, i) => ({ ...row, sno: i + 1 }));
+  }, [customers, filterPlan, filterStatus, searchQuery]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredCustomers.length / PAGE_SIZE));
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterPlan, filterStatus, searchQuery]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
+
+  const pageCustomers = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return filteredCustomers.slice(start, start + PAGE_SIZE);
+  }, [filteredCustomers, currentPage]);
 
   const closeMenus = () => {
     setOpenActionId(null);
@@ -207,6 +320,21 @@ const Customers = () => {
     }
   };
 
+  const handleAddFunds = async (credit) => {
+    if (!fundsCustomer?.id) return;
+    setFundsError(null);
+    setFundsSaving(true);
+    try {
+      await creditCustomerAccount(fundsCustomer.id, credit);
+      setFundsCustomer(null);
+    } catch (e) {
+      console.error('Credit account failed', e);
+      setFundsError(e?.message || 'Failed to add funds');
+    } finally {
+      setFundsSaving(false);
+    }
+  };
+
   return (
     <div style={styles.container} className="dashboard-container customers-page">
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
@@ -236,6 +364,16 @@ const Customers = () => {
           customer={viewCustomer}
           onClose={() => setViewCustomer(null)}
           onEdit={(row) => setEditingCustomer(row)}
+          onAddFunds={(row) => setFundsCustomer(row)}
+        />
+      )}
+      {fundsCustomer && (
+        <AddFundsModal
+          customer={fundsCustomer}
+          onClose={() => { if (!fundsSaving) { setFundsCustomer(null); setFundsError(null); } }}
+          onSubmit={handleAddFunds}
+          saving={fundsSaving}
+          error={fundsError}
         />
       )}
 
@@ -269,21 +407,82 @@ const Customers = () => {
           <div style={styles.filters}>
             <div style={styles.selectWrap}>
               <FiFilter style={styles.selectIcon} />
-              <select style={styles.select} className="filter-select">
-                <option>Plan</option>
+              <select
+                style={styles.select}
+                className="filter-select"
+                value={filterPlan}
+                onChange={(e) => setFilterPlan(e.target.value)}
+                aria-label="Filter by plan"
+              >
+                <option value="all">All Plans</option>
+                {planOptions.map((p) => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
               </select>
             </div>
             <div style={styles.selectWrap}>
               <FiFilter style={styles.selectIcon} />
-              <select style={styles.select} className="filter-select">
-                <option>All Status</option>
+              <select
+                style={styles.select}
+                className="filter-select"
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                aria-label="Filter by status"
+              >
+                <option value="all">All Status</option>
+                <option value="active">Active (Has Balance)</option>
+                <option value="inactive">Inactive (Zero Balance)</option>
               </select>
             </div>
-            <button style={styles.filterIconBtn} aria-label="Search"><FiSearch /></button>
-            <button style={styles.filterIconBtn} aria-label="Filter"><FiFilter /></button>
+
+            {searchOpen ? (
+              <div style={styles.searchFilterWrap}>
+                <FiSearch style={styles.selectIcon} />
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search name, mobile, ID…"
+                  style={styles.searchFilterInput}
+                  autoFocus
+                  aria-label="Search customers"
+                />
+                {searchQuery ? (
+                  <button
+                    type="button"
+                    style={styles.searchClearBtn}
+                    onClick={() => setSearchQuery('')}
+                    aria-label="Clear search"
+                  >
+                    <FiX size={16} />
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+
+            <button
+              type="button"
+              style={{
+                ...styles.filterIconBtn,
+                ...(searchOpen ? styles.filterIconBtnActive : {}),
+              }}
+              aria-label="Toggle search"
+              title="Search"
+              onClick={() => setSearchOpen((v) => !v)}
+            >
+              <FiSearch />
+            </button>
           </div>
-          <button type="button" style={styles.addBtn} className="add-btn" onClick={() => setShowAddModal(true)}>+ Add Customer</button>
+          <Button type="button" onClick={() => setShowAddModal(true)}>+ Add Customer</Button>
         </div>
+
+        {!loading && (
+          <p style={styles.resultMeta}>
+            Showing {pageCustomers.length} of {filteredCustomers.length} customer
+            {filteredCustomers.length === 1 ? '' : 's'}
+            {filteredCustomers.length !== customers.length ? ` (filtered from ${customers.length})` : ''}
+          </p>
+        )}
 
         {/* Table action menu (portal, outside table) */}
         <ActionMenu
@@ -291,9 +490,9 @@ const Customers = () => {
           onClose={() => { setOpenActionId(null); setActionAnchorEl(null); }}
           anchorEl={actionAnchorEl}
           busy={deleting}
-          onView={() => { const row = customers.find((r) => r.id === openActionId); if (row) handleView(row); }}
-          onEdit={() => { const row = customers.find((r) => r.id === openActionId); if (row) handleEdit(row); }}
-          onDelete={() => { const row = customers.find((r) => r.id === openActionId); if (row) return handleDelete(row); }}
+          onView={() => { const row = filteredCustomers.find((r) => r.id === openActionId); if (row) handleView(row); }}
+          onEdit={() => { const row = filteredCustomers.find((r) => r.id === openActionId); if (row) handleEdit(row); }}
+          onDelete={() => { const row = filteredCustomers.find((r) => r.id === openActionId); if (row) return handleDelete(row); }}
         />
 
         {/* Table - desktop */}
@@ -306,21 +505,25 @@ const Customers = () => {
                 <th style={styles.th}><span className="th-content">Joined Date <MdKeyboardArrowUp size={14} /><MdKeyboardArrowDown size={14} /></span></th>
                 <th style={styles.th}><span className="th-content">Name <MdKeyboardArrowUp size={14} /><MdKeyboardArrowDown size={14} /></span></th>
                 <th style={styles.th}><span className="th-content">Password <MdKeyboardArrowUp size={14} /><MdKeyboardArrowDown size={14} /></span></th>
-                <th style={styles.th}><span className="th-content">Amount <MdKeyboardArrowUp size={14} /><MdKeyboardArrowDown size={14} /></span></th>
+                <th style={styles.th}><span className="th-content">Account <MdKeyboardArrowUp size={14} /><MdKeyboardArrowDown size={14} /></span></th>
+                <th style={styles.th}><span className="th-content">Saved Weight <MdKeyboardArrowUp size={14} /><MdKeyboardArrowDown size={14} /></span></th>
                 <th style={styles.th}><span className="th-content">Plan <MdKeyboardArrowUp size={14} /><MdKeyboardArrowDown size={14} /></span></th>
                 <th style={styles.th}><span className="th-content">Mobile Number <MdKeyboardArrowUp size={14} /><MdKeyboardArrowDown size={14} /></span></th>
                 <th style={styles.th}>Action</th>
               </tr>
             </thead>
             <tbody>
-              {(loading ? [] : customers).map((row) => (
+              {(loading ? [] : pageCustomers).map((row) => (
                 <tr key={row.id || row.sno} style={styles.tr}>
                   <td style={styles.td}>{row.sno}</td>
                   <td style={styles.td}>{row.cusId}</td>
                   <td style={styles.td}>{formatToIST(row.joinedDate)}</td>
                   <td style={styles.td}>{row.name}</td>
                   <td style={styles.td}>{row.password}</td>
-                  <td style={styles.td}>₹ {row.amount}</td>
+                  <td style={styles.td}>{formatINR(row.accountBalance ?? row.amount ?? 0)}</td>
+                  <td style={styles.td}>
+                    {formatSavedWeightForDisplay(row.accountBalance ?? row.amount ?? 0, rates, row)}
+                  </td>
                   <td style={styles.td}>{row.plan}</td>
                   <td style={styles.td}>{row.mobile}</td>
                   <td style={styles.tdAction}>
@@ -342,6 +545,13 @@ const Customers = () => {
                   </td>
                 </tr>
               ))}
+              {!loading && pageCustomers.length === 0 && (
+                <tr>
+                  <td style={{ ...styles.td, textAlign: 'center', padding: 24 }} colSpan={10}>
+                    No customers match your filters.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -352,20 +562,24 @@ const Customers = () => {
           onClose={() => { setOpenCardActionId(null); setCardActionAnchorEl(null); }}
           anchorEl={cardActionAnchorEl}
           busy={deleting}
-          onView={() => { const row = customers.find((r) => r.id === openCardActionId); if (row) handleView(row); }}
-          onEdit={() => { const row = customers.find((r) => r.id === openCardActionId); if (row) handleEdit(row); }}
-          onDelete={() => { const row = customers.find((r) => r.id === openCardActionId); if (row) return handleDelete(row); }}
+          onView={() => { const row = filteredCustomers.find((r) => r.id === openCardActionId); if (row) handleView(row); }}
+          onEdit={() => { const row = filteredCustomers.find((r) => r.id === openCardActionId); if (row) handleEdit(row); }}
+          onDelete={() => { const row = filteredCustomers.find((r) => r.id === openCardActionId); if (row) return handleDelete(row); }}
         />
 
         {/* Cards - mobile only (hidden on desktop) */}
         <div className="customers-cards" style={styles.cardsWrap}>
-          {(loading ? [] : customers).map((row) => (
+          {(loading ? [] : pageCustomers).map((row) => (
             <div key={row.id || row.sno} style={styles.card} className="customer-card">
               <div style={styles.cardRow}><span style={styles.cardLabel}>S.NO</span><span>{row.sno}</span></div>
               <div style={styles.cardRow}><span style={styles.cardLabel}>Cus ID</span><span>{row.cusId}</span></div>
               <div style={styles.cardRow}><span style={styles.cardLabel}>Joined Date</span><span>{formatToIST(row.joinedDate)}</span></div>
               <div style={styles.cardRow}><span style={styles.cardLabel}>Name</span><span>{row.name}</span></div>
-              <div style={styles.cardRow}><span style={styles.cardLabel}>Amount</span><span>₹ {row.amount}</span></div>
+              <div style={styles.cardRow}><span style={styles.cardLabel}>Account</span><span>{formatINR(row.accountBalance ?? row.amount ?? 0)}</span></div>
+              <div style={styles.cardRow}>
+                <span style={styles.cardLabel}>Saved Weight</span>
+                <span>{formatSavedWeightForDisplay(row.accountBalance ?? row.amount ?? 0, rates, row)}</span>
+              </div>
               <div style={styles.cardRow}><span style={styles.cardLabel}>Plan</span><span>{row.plan}</span></div>
               <div style={styles.cardRow}><span style={styles.cardLabel}>Mobile</span><span>{row.mobile}</span></div>
               <div style={styles.cardActionWrap}>
@@ -383,6 +597,9 @@ const Customers = () => {
               </div>
             </div>
           ))}
+          {!loading && pageCustomers.length === 0 && (
+            <p style={{ color: '#6b7280', fontSize: 14 }}>No customers match your filters.</p>
+          )}
         </div>
 
         {loading && <p style={{ marginBottom: 16, color: '#666' }}>Loading customers…</p>}
@@ -581,6 +798,43 @@ const styles = {
     color: '#666',
     fontSize: '18px',
   },
+  filterIconBtnActive: {
+    backgroundColor: '#fce7f0',
+    color: MAROON,
+  },
+  searchFilterWrap: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    backgroundColor: LIGHT_GRAY,
+    borderRadius: '8px',
+    padding: '0 8px 0 12px',
+    minWidth: '220px',
+    flex: '1 1 220px',
+    maxWidth: '320px',
+  },
+  searchFilterInput: {
+    border: 'none',
+    background: 'transparent',
+    outline: 'none',
+    fontSize: '14px',
+    color: '#333',
+    padding: '10px 0',
+    width: '100%',
+  },
+  searchClearBtn: {
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    color: '#666',
+    display: 'flex',
+    padding: 4,
+  },
+  resultMeta: {
+    margin: '0 0 12px',
+    fontSize: '13px',
+    color: '#6b7280',
+  },
   addBtn: {
     backgroundColor: MAROON,
     color: '#fff',
@@ -745,13 +999,19 @@ const styles = {
   formLabel: { display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' },
   formInput: { width: '100%', padding: '10px 14px', borderRadius: '8px', border: `1px solid ${BORDER_GRAY}`, fontSize: '14px', color: '#333', boxSizing: 'border-box' },
   formSelect: { width: '100%', padding: '10px 14px', borderRadius: '8px', border: `1px solid ${BORDER_GRAY}`, fontSize: '14px', color: '#333', backgroundColor: '#fff', cursor: 'pointer', boxSizing: 'border-box' },
-  modalFooter: { display: 'flex', justifyContent: 'flex-end', gap: '12px', paddingTop: '20px', marginTop: '8px', borderTop: `1px solid ${BORDER_GRAY}` },
+  modalFooter: { display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center', gap: '10px', padding: '16px 24px 20px', marginTop: '8px', borderTop: `1px solid ${BORDER_GRAY}` },
   modalBtnCancel: { padding: '10px 20px', borderRadius: '8px', border: '1px solid #9ca3af', backgroundColor: '#fff', color: '#374151', fontSize: '14px', fontWeight: '500', cursor: 'pointer' },
   modalBtnPrimary: { padding: '10px 20px', borderRadius: '8px', border: 'none', backgroundColor: MAROON, color: '#fff', fontSize: '14px', fontWeight: '500', cursor: 'pointer' },
   viewOverlay: { position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: '20px' },
   viewPanel: { backgroundColor: '#fff', borderRadius: '12px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)', maxWidth: '520px', width: '100%', maxHeight: '90vh', overflow: 'auto' },
   modalBody: { padding: '24px' },
   modalSectionTitle: { fontSize: '16px', fontWeight: '700', color: MAROON, marginBottom: '16px' },
+  ledgerList: { display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '240px', overflowY: 'auto' },
+  ledgerItem: { padding: '10px 12px', borderRadius: '8px', border: `1px solid ${BORDER_GRAY}`, backgroundColor: '#fafafa' },
+  ledgerTop: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' },
+  ledgerMode: { fontSize: '12px', fontWeight: '700', color: MAROON, backgroundColor: '#fce7f0', padding: '2px 8px', borderRadius: '999px' },
+  ledgerMeta: { marginTop: '4px', fontSize: '12px', color: '#6b7280' },
+  ledgerNote: { marginTop: '4px', fontSize: '13px', color: '#374151' },
   modalDetails: { display: 'flex', flexDirection: 'column', gap: '12px' },
   modalRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', fontSize: '14px' },
   modalLabel: { fontWeight: '500', color: '#4b5563' },

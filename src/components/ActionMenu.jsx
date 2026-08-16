@@ -8,7 +8,7 @@ const PORTAL_Z_INDEX = 99999;
  * Action dropdown (View, Edit, Delete) rendered in a portal so it appears
  * outside table overflow and above all content. Pass anchorEl (trigger DOM node).
  */
-const ActionMenu = ({ isOpen, onClose, anchorEl, onView, onEdit, onDelete, busy = false, placement = 'bottom-end' }) => {
+const ActionMenu = ({ isOpen, onClose, anchorEl, onView, onEdit, onDelete, onCancelChit, busy = false, placement = 'bottom-end' }) => {
   const menuRef = useRef(null);
   const [position, setPosition] = useState({ top: 0, left: 0 });
 
@@ -25,8 +25,8 @@ const ActionMenu = ({ isOpen, onClose, anchorEl, onView, onEdit, onDelete, busy 
   useEffect(() => {
     if (!isOpen || !anchorEl || !menuRef.current) return;
     const rect = anchorEl.getBoundingClientRect();
-    const menuWidth = 120;
-    const menuHeight = 120;
+    const menuWidth = onCancelChit ? 150 : 120;
+    const menuHeight = onCancelChit ? 160 : 120;
     const gap = 4;
     const padding = 8;
     let top = rect.bottom + gap;
@@ -36,7 +36,7 @@ const ActionMenu = ({ isOpen, onClose, anchorEl, onView, onEdit, onDelete, busy 
     if (top + menuHeight > window.innerHeight - padding) top = rect.top - menuHeight - gap;
     if (top < padding) top = padding;
     setPosition({ top, left });
-  }, [isOpen, anchorEl, placement]);
+  }, [isOpen, anchorEl, placement, onCancelChit]);
 
   if (!isOpen) return null;
 
@@ -61,6 +61,18 @@ const ActionMenu = ({ isOpen, onClose, anchorEl, onView, onEdit, onDelete, busy 
     >
       <button type="button" className="action-dropdown-item" disabled={busy} onMouseDown={(e) => e.preventDefault()} onClick={() => { if (busy) return; onView?.(); onClose(); }}>View</button>
       <button type="button" className="action-dropdown-item" disabled={busy} onMouseDown={(e) => e.preventDefault()} onClick={() => { if (busy) return; onEdit?.(); onClose(); }}>Edit</button>
+      {onCancelChit && (
+        <button
+          type="button"
+          className="action-dropdown-item"
+          disabled={busy}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => { if (busy) return; onCancelChit(); onClose(); }}
+          style={{ color: '#b45309' }}
+        >
+          Cancel Chit
+        </button>
+      )}
       <button
         type="button"
         className={`action-dropdown-item${busy ? ' action-dropdown-item--loading' : ''}`}

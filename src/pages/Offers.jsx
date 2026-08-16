@@ -71,8 +71,8 @@ const AddEditOfferModal = ({ offer, onClose, onSave, error, saving }) => {
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} style={{ ...styles.formInput, minHeight: 80 }} />
           </div>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-            <Button type="button" variant="secondary" onClick={onClose} disabled={saving} style={styles.modalBtnCancel}>Cancel</Button>
-            <Button type="submit" loading={saving} loadingText={isEdit ? 'Updating…' : 'Adding…'} style={styles.modalBtnPrimary}>
+            <Button type="button" variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button>
+            <Button type="submit" loading={saving} loadingText={isEdit ? 'Updating…' : 'Adding…'}>
               {isEdit ? 'Update' : 'Add Offer'}
             </Button>
           </div>
@@ -158,7 +158,7 @@ const Offers = () => {
             <h1 style={styles.pageTitle}>Offers</h1>
           </div>
           <div style={styles.headerActions} className="dashboard-header-actions">
-            <button type="button" style={styles.addBtn} onClick={() => setShowAddModal(true)}>+ Add Offer</button>
+            <Button type="button" onClick={() => setShowAddModal(true)}>+ Add Offer</Button>
             <div style={styles.searchContainer} className="search-container">
               <FiSearch style={styles.searchIcon} />
               <input type="text" placeholder="Search offers..." style={styles.searchInput} value={search} onChange={(e) => setSearch(e.target.value)} />

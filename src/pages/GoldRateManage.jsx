@@ -96,14 +96,14 @@ const GoldRateManage = () => {
                 <input type="date" style={styles.input} value={date} onChange={(e) => setDate(e.target.value)} />
               </div>
               <div style={styles.inputGroup}>
-                <label style={styles.inputLabel}>Enter Gold Rate</label>
-                <input type="text" placeholder="Enter Gold Rate" style={styles.input} value={goldRateInput} onChange={(e) => setGoldRateInput(e.target.value)} />
+                <label style={styles.inputLabel}>Enter Gold Rate (₹ per gram)</label>
+                <input type="text" placeholder="e.g. 7500" style={styles.input} value={goldRateInput} onChange={(e) => setGoldRateInput(e.target.value)} />
               </div>
               <div style={styles.inputGroup}>
-                <label style={styles.inputLabel}>Enter Silver Rate</label>
-                <input type="text" placeholder="Enter Silver Rate" style={styles.input} value={silverRateInput} onChange={(e) => setSilverRateInput(e.target.value)} />
+                <label style={styles.inputLabel}>Enter Silver Rate (₹ per gram)</label>
+                <input type="text" placeholder="e.g. 95" style={styles.input} value={silverRateInput} onChange={(e) => setSilverRateInput(e.target.value)} />
               </div>
-              <Button type="submit" loading={adding} loadingText="Adding…" style={styles.addBtn}>Add</Button>
+              <Button type="submit" loading={adding} loadingText="Adding…">Add</Button>
             </form>
           </div>
 

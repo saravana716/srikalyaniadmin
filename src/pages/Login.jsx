@@ -3,6 +3,7 @@ import { useNavigate, Navigate } from 'react-router-dom';
 import { FiMail, FiLock } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
 import Button from '../components/Button';
+import BrandLogo from '../components/BrandLogo';
 import loginBg from '../assets/login_bg.png';
 
 const Login = () => {
@@ -38,11 +39,7 @@ const Login = () => {
                 <div style={styles.formSection} className="login-form-section">
                     <div style={styles.formContainer} className="login-form-container">
                         <div style={styles.brandBlock}>
-                            <div style={styles.logoCircle}>
-                                <span style={{ fontSize: '28px' }}>♛</span>
-                            </div>
-                            <h1 style={styles.logoText}>SRI KALYANI JEWELLERY</h1>
-                            <p style={styles.logoTagline}>Authentic Gold & Diamond</p>
+                            <BrandLogo width={220} />
                         </div>
                         <h2 style={styles.welcomeText}>WELCOME ADMIN</h2>
 
@@ -78,10 +75,10 @@ const Login = () => {
                             <Button
                                 type="submit"
                                 variant="login"
+                                size="lg"
                                 fullWidth
                                 loading={submitting}
                                 loadingText="Logging in…"
-                                style={styles.button}
                             >
                                 LOGIN
                             </Button>
@@ -131,30 +128,6 @@ const styles = {
         flexDirection: 'column',
         alignItems: 'center',
         marginBottom: '2rem',
-    },
-    logoCircle: {
-        width: '56px',
-        height: '56px',
-        borderRadius: '50%',
-        backgroundColor: '#801A39',
-        color: 'gold',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: '12px',
-    },
-    logoText: {
-        color: '#3f1d1d',
-        fontSize: '1.35rem',
-        fontWeight: '700',
-        margin: 0,
-        letterSpacing: '0.5px',
-        lineHeight: 1.3,
-    },
-    logoTagline: {
-        color: '#666',
-        fontSize: '0.85rem',
-        margin: '6px 0 0',
     },
     welcomeText: {
         color: '#3f1d1d',

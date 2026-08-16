@@ -2,12 +2,12 @@ import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Button from './Button';
+import BrandLogo from './BrandLogo';
 import {
     MdDashboard,
     MdPeople,
     MdAssignment,
     MdPayment,
-    MdSchedule,
     MdTrendingUp,
     MdDescription,
     MdSettings,
@@ -29,7 +29,6 @@ const Sidebar = ({ isOpen, onClose }) => {
         { name: 'Chit Fund Plans', icon: <MdAssignment />, path: '/plans' },
         { name: 'Plan Purchases', icon: <MdAssignment />, path: '/plan-purchases' },
         { name: 'Payment', icon: <MdPayment />, path: '/payment' },
-        { name: 'Installments', icon: <MdSchedule />, path: '/installments' },
         { name: 'Products', icon: <MdInventory2 />, path: '/products' },
         { name: 'Offers', icon: <MdLocalOffer />, path: '/offers' },
         { name: 'Gold Rate Manage', icon: <MdTrendingUp />, path: '/gold-rate' },
@@ -61,13 +60,7 @@ const Sidebar = ({ isOpen, onClose }) => {
             </button>
 
             <div style={styles.logoContainer}>
-                <div style={styles.logo}>
-                    <div style={styles.logoCircle}>
-                        <span style={{ fontSize: '24px' }}>♛</span>
-                    </div>
-                    <span style={styles.logoText}>SRI KALYANI JEWELLERY</span>
-                    <span style={styles.logoTagline}>Authentic Gold & Diamond</span>
-                </div>
+                <BrandLogo width={168} />
             </div>
 
             <nav style={styles.nav}>
@@ -95,10 +88,10 @@ const Sidebar = ({ isOpen, onClose }) => {
                 <Button
                     type="button"
                     variant="secondary"
+                    fullWidth
                     loading={loggingOut}
                     loadingText="Logging out…"
                     onClick={handleLogout}
-                    style={{ ...styles.logoutLink, width: '100%', justifyContent: 'flex-start' }}
                 >
                     {!loggingOut && <MdLogout style={styles.logoutIcon} />}
                     Logout
@@ -121,45 +114,19 @@ const styles = {
         borderRight: '1px solid #eee',
     },
     logoContainer: {
-        padding: '20px 24px',
-        backgroundColor: '#F5F5F5',
+        padding: '8px 16px 4px',
+        backgroundColor: 'transparent',
         display: 'flex',
         justifyContent: 'center',
-        marginBottom: '8px',
-        marginTop: '20px',
-    },
-    logo: {
-        display: 'flex',
-        flexDirection: 'column',
         alignItems: 'center',
-        textAlign: 'center',
-    },
-    logoCircle: {
-        width: '50px',
-        height: '50px',
-        borderRadius: '50%',
-        backgroundColor: '#801A39',
-        color: 'gold',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: '10px',
-    },
-    logoText: {
-        fontSize: '14px',
-        fontWeight: 'bold',
-        color: '#1a1a1a',
-        letterSpacing: '0.5px',
-    },
-    logoTagline: {
-        fontSize: '11px',
-        color: '#666',
+        marginBottom: '4px',
         marginTop: '4px',
+        flexShrink: 0,
     },
     nav: {
         display: 'flex',
         flexDirection: 'column',
-        padding: '0 12px',
+        padding: '4px 12px 0',
         flex: 1,
         overflowY: 'auto',
     },

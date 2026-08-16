@@ -6,7 +6,6 @@ import Dashboard from './pages/Dashboard';
 import Customers from './pages/Customers';
 import ChitFundPlans from './pages/ChitFundPlans';
 import Payment from './pages/Payment';
-import Installments from './pages/Installments';
 import Settings from './pages/Settings';
 import GoldRateManage from './pages/GoldRateManage';
 import Reports from './pages/Reports';
@@ -26,7 +25,7 @@ function App() {
           <Route path="/plans" element={<ProtectedRoute><ChitFundPlans /></ProtectedRoute>} />
           <Route path="/plan-purchases" element={<ProtectedRoute><PlanPurchases /></ProtectedRoute>} />
           <Route path="/payment" element={<ProtectedRoute><Payment /></ProtectedRoute>} />
-          <Route path="/installments" element={<ProtectedRoute><Installments /></ProtectedRoute>} />
+          <Route path="/installments" element={<Navigate to="/payment" replace />} />
           <Route path="/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
           <Route path="/offers" element={<ProtectedRoute><Offers /></ProtectedRoute>} />
           <Route path="/gold-rate" element={<ProtectedRoute><GoldRateManage /></ProtectedRoute>} />

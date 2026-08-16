@@ -78,8 +78,8 @@ const AddEditAdminModal = ({ admin, onClose, onSave, error, saving }) => {
             />
           </div>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-            <Button type="button" variant="secondary" onClick={onClose} disabled={saving} style={styles.modalBtnCancel}>Cancel</Button>
-            <Button type="submit" loading={saving} loadingText={isEdit ? 'Updating…' : 'Creating…'} style={styles.modalBtnPrimary}>
+            <Button type="button" variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button>
+            <Button type="submit" loading={saving} loadingText={isEdit ? 'Updating…' : 'Creating…'}>
               {isEdit ? 'Update' : 'Create Admin'}
             </Button>
           </div>
@@ -176,7 +176,7 @@ const AdminAccounts = () => {
             <h1 style={styles.pageTitle}>Admin Accounts</h1>
           </div>
           <div style={styles.headerActions} className="dashboard-header-actions">
-            <button type="button" style={styles.addBtn} onClick={() => setShowAddModal(true)}>+ Add Admin</button>
+            <Button type="button" onClick={() => setShowAddModal(true)}>+ Add Admin</Button>
             <div style={styles.searchContainer} className="search-container">
               <FiSearch style={styles.searchIcon} />
               <input type="text" placeholder="Search admins..." style={styles.searchInput} value={search} onChange={(e) => setSearch(e.target.value)} />

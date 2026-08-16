@@ -58,17 +58,191 @@ a {
 .action-dropdown-item:hover {
   background-color: #f0f0f0;
 }
-.action-dropdown-item:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-.action-dropdown-item--loading {
+/* =========================================================
+   Unified Button System (app-wide)
+   ========================================================= */
+.app-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
+  box-sizing: border-box;
+  margin: 0;
+  border-radius: 10px;
+  font-family: inherit;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  text-align: center;
+  vertical-align: middle;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease, transform 0.12s ease;
+  box-shadow: none;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
-/* App button spinner */
+.app-btn:focus-visible {
+  outline: 2px solid rgba(128, 26, 57, 0.35);
+  outline-offset: 2px;
+}
+
+.app-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.app-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Sizes — locked heights so text is never cramped (win over leftover inline styles) */
+.app-btn--sm {
+  min-height: 36px !important;
+  padding: 8px 14px !important;
+  font-size: 13px !important;
+}
+
+.app-btn--md {
+  min-height: 42px !important;
+  padding: 10px 18px !important;
+  font-size: 14px !important;
+}
+
+.app-btn--lg {
+  min-height: 48px !important;
+  padding: 12px 22px !important;
+  font-size: 15px !important;
+}
+
+.app-btn--block {
+  width: 100%;
+}
+
+.app-btn-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.2;
+}
+
+/* Variants */
+.app-btn--primary {
+  background-color: #801A39 !important;
+  color: #fff !important;
+  border: 1px solid #801A39 !important;
+}
+
+.app-btn--primary:hover:not(:disabled) {
+  background-color: #6d1630;
+  border-color: #6d1630;
+  box-shadow: 0 4px 12px rgba(128, 26, 57, 0.22);
+}
+
+.app-btn--secondary {
+  background-color: #fff !important;
+  color: #374151 !important;
+  border: 1px solid #d1d5db !important;
+}
+
+.app-btn--secondary:hover:not(:disabled) {
+  background-color: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.app-btn--danger {
+  background-color: #dc2626 !important;
+  color: #fff !important;
+  border: 1px solid #dc2626 !important;
+}
+
+.app-btn--danger:hover:not(:disabled) {
+  background-color: #b91c1c;
+  border-color: #b91c1c;
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.2);
+}
+
+.app-btn--login {
+  background-color: #5c202a !important;
+  color: #fff !important;
+  border: 1px solid #5c202a !important;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+  min-height: 48px !important;
+  font-size: 15px !important;
+}
+
+.app-btn--login:hover:not(:disabled) {
+  background-color: #4a1a22;
+  border-color: #4a1a22;
+}
+
+.app-btn--ghost {
+  background-color: transparent;
+  color: #801A39;
+  border: 1px solid transparent;
+}
+
+.app-btn--ghost:hover:not(:disabled) {
+  background-color: #fce7f0;
+}
+
+/* Header / page primary actions */
+.app-btn--header-add,
+button.add-btn,
+button.add-plan-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  border: 1px solid #801A39;
+  background-color: #801A39;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.app-btn--header-add:hover,
+button.add-btn:hover,
+button.add-plan-btn:hover {
+  background-color: #6d1630;
+  box-shadow: 0 4px 12px rgba(128, 26, 57, 0.22);
+}
+
+/* Modal footers — even spacing, wrap cleanly on mobile */
+.app-modal-footer,
+.modal-footer,
+.add-customer-modal-footer,
+.add-edit-plan-modal-footer,
+.view-more-modal-footer,
+.payment-view-modal-footer,
+.installment-view-modal-footer {
+  display: flex !important;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px !important;
+  margin-top: 8px;
+}
+
+.app-modal-footer .app-btn,
+.modal-footer .app-btn,
+.add-customer-modal-footer .app-btn,
+.add-edit-plan-modal-footer .app-btn {
+  flex: 0 0 auto;
+}
+
+/* Spinner */
 @keyframes app-btn-spin {
   to {
     transform: rotate(360deg);
@@ -78,18 +252,29 @@ a {
   width: 16px;
   height: 16px;
   border: 2px solid rgba(255, 255, 255, 0.35);
-  border-top-color: currentColor;
+  border-top-color: #fff;
   border-radius: 50%;
   animation: app-btn-spin 0.65s linear infinite;
   flex-shrink: 0;
 }
-.app-btn--loading .app-btn-spinner {
-  border-color: rgba(255, 255, 255, 0.35);
-  border-top-color: #fff;
-}
-.app-btn--secondary .app-btn-spinner {
+.app-btn--secondary .app-btn-spinner,
+.app-btn--ghost .app-btn-spinner {
   border-color: rgba(128, 26, 57, 0.2);
   border-top-color: #801A39;
+}
+.app-btn--loading {
+  pointer-events: none;
+}
+
+/* Action dropdown */
+.action-dropdown-item:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.action-dropdown-item--loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 /* Right-side View more panel (Chit Fund Plans) */

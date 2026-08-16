@@ -250,8 +250,8 @@ const AddEditProductModal = ({ product, onClose, onSave, error, saving }) => {
           </div>
 
           <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-            <Button type="button" variant="secondary" onClick={onClose} disabled={saving} style={styles.modalBtnCancel}>Cancel</Button>
-            <Button type="submit" loading={saving} loadingText={isEdit ? 'Uploading & updating…' : 'Uploading & adding…'} style={styles.modalBtnPrimary}>
+            <Button type="button" variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button>
+            <Button type="submit" loading={saving} loadingText={isEdit ? 'Uploading & updating…' : 'Uploading & adding…'}>
               {isEdit ? 'Update' : 'Add Product'}
             </Button>
           </div>
@@ -337,7 +337,7 @@ const Products = () => {
             <h1 style={styles.pageTitle}>Products</h1>
           </div>
           <div style={styles.headerActions} className="dashboard-header-actions">
-            <button type="button" style={styles.addBtn} onClick={() => setShowAddModal(true)}>+ Add Product</button>
+            <Button type="button" onClick={() => setShowAddModal(true)}>+ Add Product</Button>
             <div style={styles.searchContainer} className="search-container">
               <FiSearch style={styles.searchIcon} />
               <input type="text" placeholder="Search products..." style={styles.searchInput} value={search} onChange={(e) => setSearch(e.target.value)} />
