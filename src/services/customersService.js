@@ -13,6 +13,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { findPlanPurchasesForCustomer, creditPlanPurchaseAmount, pickBestPlanPurchase } from './planPurchasesService';
+import { subscribeAllPayments } from './paymentsService';
 
 const COLLECTION = 'customers';
 const LEDGER = 'customerLedger';
@@ -270,3 +271,36 @@ export async function creditCustomerAccount(customerId, credit) {
 export async function deleteCustomer(id) {
   await deleteDoc(doc(db, COLLECTION, id));
 }
+
+/**
+ * Subscribe to all payments (Installments, Direct Payments, Add Cash) for a specific customer.
+ */
+export function subscribeCustomerAllPayments(customer, setData) {
+  if (!customer) {
+    setData([]);
+    return () => {};
+  }
+
+  const cid = String(customer.id || '').trim().toLowerCase();
+  const cusId = String(customer.cusId || '').trim().toLowerCase();
+  const mobile = String(customer.mobile || '').trim().toLowerCase();
+  const name = String(customer.name || '').trim().toLowerCase();
+
+  return subscribeAllPayments((allPayments) => {
+    const customerPayments = allPayments.filter((row) => {
+      const rowCusId = String(row.cusId || row.customerId || '').trim().toLowerCase();
+      const rowName = String(row.customerName || row.name || '').trim().toLowerCase();
+      const rowMobile = String(row.mobile || '').trim().toLowerCase();
+
+      if (cusId && rowCusId === cusId) return true;
+      if (cid && rowCusId === cid) return true;
+      if (mobile && rowMobile && rowMobile === mobile) return true;
+      if (name && rowName && rowName === name) return true;
+
+      return false;
+    });
+
+    setData(customerPayments);
+  });
+}
+

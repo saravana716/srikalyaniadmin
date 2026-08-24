@@ -8,7 +8,7 @@ const PORTAL_Z_INDEX = 99999;
  * Action dropdown (View, Edit, Delete) rendered in a portal so it appears
  * outside table overflow and above all content. Pass anchorEl (trigger DOM node).
  */
-const ActionMenu = ({ isOpen, onClose, anchorEl, onView, onEdit, onDelete, onCancelChit, busy = false, placement = 'bottom-end' }) => {
+const ActionMenu = ({ isOpen, onClose, anchorEl, onView, onPaymentHistory, onEdit, onDelete, onCancelChit, busy = false, placement = 'bottom-end' }) => {
   const menuRef = useRef(null);
   const [position, setPosition] = useState({ top: 0, left: 0 });
 
@@ -25,8 +25,8 @@ const ActionMenu = ({ isOpen, onClose, anchorEl, onView, onEdit, onDelete, onCan
   useEffect(() => {
     if (!isOpen || !anchorEl || !menuRef.current) return;
     const rect = anchorEl.getBoundingClientRect();
-    const menuWidth = onCancelChit ? 150 : 120;
-    const menuHeight = onCancelChit ? 160 : 120;
+    const menuWidth = onCancelChit || onPaymentHistory ? 150 : 120;
+    const menuHeight = (onCancelChit ? 160 : 120) + (onPaymentHistory ? 36 : 0);
     const gap = 4;
     const padding = 8;
     let top = rect.bottom + gap;
@@ -36,7 +36,7 @@ const ActionMenu = ({ isOpen, onClose, anchorEl, onView, onEdit, onDelete, onCan
     if (top + menuHeight > window.innerHeight - padding) top = rect.top - menuHeight - gap;
     if (top < padding) top = padding;
     setPosition({ top, left });
-  }, [isOpen, anchorEl, placement, onCancelChit]);
+  }, [isOpen, anchorEl, placement, onCancelChit, onPaymentHistory]);
 
   if (!isOpen) return null;
 
@@ -49,7 +49,7 @@ const ActionMenu = ({ isOpen, onClose, anchorEl, onView, onEdit, onDelete, onCan
         top: position.top,
         left: position.left,
         zIndex: PORTAL_Z_INDEX,
-        minWidth: '120px',
+        minWidth: onCancelChit || onPaymentHistory ? '150px' : '120px',
         backgroundColor: '#fafafa',
         border: `1px solid ${BORDER_GRAY}`,
         borderRadius: '8px',
@@ -60,6 +60,17 @@ const ActionMenu = ({ isOpen, onClose, anchorEl, onView, onEdit, onDelete, onCan
       }}
     >
       <button type="button" className="action-dropdown-item" disabled={busy} onMouseDown={(e) => e.preventDefault()} onClick={() => { if (busy) return; onView?.(); onClose(); }}>View</button>
+      {onPaymentHistory && (
+        <button
+          type="button"
+          className="action-dropdown-item"
+          disabled={busy}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => { if (busy) return; onPaymentHistory?.(); onClose(); }}
+        >
+          Payment History
+        </button>
+      )}
       <button type="button" className="action-dropdown-item" disabled={busy} onMouseDown={(e) => e.preventDefault()} onClick={() => { if (busy) return; onEdit?.(); onClose(); }}>Edit</button>
       {onCancelChit && (
         <button

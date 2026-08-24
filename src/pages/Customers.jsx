@@ -4,10 +4,11 @@ import ActionMenu from '../components/ActionMenu';
 import Button from '../components/Button';
 import { FiSearch, FiSettings, FiBell, FiMenu, FiFilter, FiX } from 'react-icons/fi';
 import { MdKeyboardArrowUp, MdKeyboardArrowDown } from 'react-icons/md';
-import { subscribeCustomers, addCustomer as addCustomerToDb, updateCustomer as updateCustomerInDb, deleteCustomer as deleteCustomerFromDb, creditCustomerAccount, subscribeCustomerLedger } from '../services/customersService';
+import { subscribeCustomers, addCustomer as addCustomerToDb, updateCustomer as updateCustomerInDb, deleteCustomer as deleteCustomerFromDb, creditCustomerAccount, subscribeCustomerLedger, subscribeCustomerAllPayments } from '../services/customersService';
 import { formatToIST } from '../utils/dateUtils';
 import { formatINR } from '../utils/currencyUtils';
 import AddFundsModal from '../components/AddFundsModal';
+import CustomerPaymentHistoryModal from '../components/CustomerPaymentHistoryModal';
 import { useLatestMetalRates } from '../hooks/useLatestMetalRates';
 import { formatSavedWeightForDisplay, savedWeightMeta } from '../utils/weightUtils';
 
@@ -105,14 +106,21 @@ const AddEditCustomerModal = ({ customer, onClose, onSave, error, saving }) => {
   );
 };
 
-const ViewCustomerModal = ({ customer, onClose, onEdit, onAddFunds }) => {
+const ViewCustomerModal = ({ customer, onClose, onEdit, onAddFunds, onOpenPaymentHistory }) => {
   const [ledger, setLedger] = useState([]);
+  const [allPayments, setAllPayments] = useState([]);
+  const [historyTab, setHistoryTab] = useState('all'); // 'all' | 'cash'
   const { rates } = useLatestMetalRates();
 
   useEffect(() => {
     if (!customer?.id) return undefined;
-    return subscribeCustomerLedger(customer.id, setLedger);
-  }, [customer?.id]);
+    const unsubLedger = subscribeCustomerLedger(customer.id, setLedger);
+    const unsubAll = subscribeCustomerAllPayments(customer, setAllPayments);
+    return () => {
+      if (typeof unsubLedger === 'function') unsubLedger();
+      if (typeof unsubAll === 'function') unsubAll();
+    };
+  }, [customer?.id, customer?.cusId]);
 
   if (!customer) return null;
 
@@ -143,7 +151,7 @@ const ViewCustomerModal = ({ customer, onClose, onEdit, onAddFunds }) => {
 
   return (
     <div style={styles.viewOverlay} className="view-more-modal-overlay" onClick={onClose}>
-      <div style={styles.viewPanel} className="view-more-modal-box" onClick={(e) => e.stopPropagation()}>
+      <div style={{ ...styles.viewPanel, maxWidth: '680px' }} className="view-more-modal-box" onClick={(e) => e.stopPropagation()}>
         <div style={styles.modalHeader}>
           <h2 style={styles.modalTitle}>Customer Details</h2>
           <button type="button" style={styles.modalClose} onClick={onClose} aria-label="Close">
@@ -161,26 +169,125 @@ const ViewCustomerModal = ({ customer, onClose, onEdit, onAddFunds }) => {
             ))}
           </div>
 
-          <h3 style={{ ...styles.modalSectionTitle, marginTop: 24 }}>Add Cash History</h3>
-          {ledger.length === 0 ? (
-            <p style={{ color: '#6b7280', fontSize: 14, margin: 0 }}>No cash additions yet.</p>
-          ) : (
-            <div style={styles.ledgerList}>
-              {ledger.map((entry) => (
-                <div key={entry.id} style={styles.ledgerItem}>
-                  <div style={styles.ledgerTop}>
-                    <strong style={{ color: '#16a34a' }}>+ {formatINR(entry.amount)}</strong>
-                    <span style={styles.ledgerMode}>{entry.paymentMode || 'Cash'}</span>
-                  </div>
-                  <div style={styles.ledgerMeta}>
-                    {formatLedgerTime(entry.createdAt)}
-                    {entry.planName ? ` · ${entry.planName}` : ''}
-                    {entry.balanceAfter != null ? ` · Bal ${formatINR(entry.balanceAfter)}` : ''}
-                  </div>
-                  {entry.note ? <div style={styles.ledgerNote}>{entry.note}</div> : null}
-                </div>
-              ))}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 24, marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: '6px',
+                  border: `1px solid ${historyTab === 'all' ? MAROON : BORDER_GRAY}`,
+                  backgroundColor: historyTab === 'all' ? MAROON : '#fff',
+                  color: historyTab === 'all' ? '#fff' : '#374151',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                }}
+                onClick={() => setHistoryTab('all')}
+              >
+                All Payment History ({allPayments.length})
+              </button>
+              <button
+                type="button"
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: '6px',
+                  border: `1px solid ${historyTab === 'cash' ? MAROON : BORDER_GRAY}`,
+                  backgroundColor: historyTab === 'cash' ? MAROON : '#fff',
+                  color: historyTab === 'cash' ? '#fff' : '#374151',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                }}
+                onClick={() => setHistoryTab('cash')}
+              >
+                Add Cash History ({ledger.length})
+              </button>
             </div>
+            {onOpenPaymentHistory && (
+              <button
+                type="button"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: MAROON,
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                }}
+                onClick={() => {
+                  onClose();
+                  onOpenPaymentHistory(customer);
+                }}
+              >
+                Full Payment View →
+              </button>
+            )}
+          </div>
+
+          {historyTab === 'all' ? (
+            allPayments.length === 0 ? (
+              <p style={{ color: '#6b7280', fontSize: 14, margin: 0 }}>No payments recorded yet.</p>
+            ) : (
+              <div style={styles.ledgerList}>
+                {allPayments.map((entry) => {
+                  const isCash = entry.source === 'customer_cash';
+                  const isInstallment = entry.source === 'installment';
+                  return (
+                    <div key={entry.id} style={styles.ledgerItem}>
+                      <div style={styles.ledgerTop}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <strong style={{ color: '#16a34a' }}>
+                            + {formatINR(entry.paidAmount ?? entry.amount ?? 0)}
+                          </strong>
+                          <span
+                            style={{
+                              fontSize: '11px',
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              fontWeight: '600',
+                              backgroundColor: isCash ? '#fef3c7' : isInstallment ? '#e0e7ff' : '#f3e8ff',
+                              color: isCash ? '#92400e' : isInstallment ? '#3730a3' : '#6b21a8',
+                            }}
+                          >
+                            {entry.sourceLabel || (isCash ? 'Add Cash' : isInstallment ? 'Installment' : 'Payment')}
+                          </span>
+                        </div>
+                        <span style={styles.ledgerMode}>{entry.mode || entry.paymentMode || 'Cash'}</span>
+                      </div>
+                      <div style={styles.ledgerMeta}>
+                        {formatLedgerTime(entry.createdAt || entry.paidDate)}
+                        {entry.chitPlan || entry.planName ? ` · ${entry.chitPlan || entry.planName}` : ''}
+                        {entry.status ? ` · ${entry.status}` : ''}
+                      </div>
+                      {entry.note ? <div style={styles.ledgerNote}>{entry.note}</div> : null}
+                    </div>
+                  );
+                })}
+              </div>
+            )
+          ) : (
+            ledger.length === 0 ? (
+              <p style={{ color: '#6b7280', fontSize: 14, margin: 0 }}>No cash additions yet.</p>
+            ) : (
+              <div style={styles.ledgerList}>
+                {ledger.map((entry) => (
+                  <div key={entry.id} style={styles.ledgerItem}>
+                    <div style={styles.ledgerTop}>
+                      <strong style={{ color: '#16a34a' }}>+ {formatINR(entry.amount)}</strong>
+                      <span style={styles.ledgerMode}>{entry.paymentMode || 'Cash'}</span>
+                    </div>
+                    <div style={styles.ledgerMeta}>
+                      {formatLedgerTime(entry.createdAt)}
+                      {entry.planName ? ` · ${entry.planName}` : ''}
+                      {entry.balanceAfter != null ? ` · Bal ${formatINR(entry.balanceAfter)}` : ''}
+                    </div>
+                    {entry.note ? <div style={styles.ledgerNote}>{entry.note}</div> : null}
+                  </div>
+                ))}
+              </div>
+            )
           )}
         </div>
         <div style={styles.modalFooter} className="app-modal-footer">
@@ -203,6 +310,7 @@ const Customers = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [viewCustomer, setViewCustomer] = useState(null);
   const [editingCustomer, setEditingCustomer] = useState(null);
+  const [historyCustomer, setHistoryCustomer] = useState(null);
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saveError, setSaveError] = useState(null);
@@ -279,6 +387,11 @@ const Customers = () => {
   const handleView = (row) => {
     closeMenus();
     setViewCustomer(row);
+  };
+
+  const handlePaymentHistory = (row) => {
+    closeMenus();
+    setHistoryCustomer(row);
   };
 
   const handleEdit = (row) => {
@@ -364,6 +477,14 @@ const Customers = () => {
           customer={viewCustomer}
           onClose={() => setViewCustomer(null)}
           onEdit={(row) => setEditingCustomer(row)}
+          onAddFunds={(row) => setFundsCustomer(row)}
+          onOpenPaymentHistory={(row) => setHistoryCustomer(row)}
+        />
+      )}
+      {historyCustomer && (
+        <CustomerPaymentHistoryModal
+          customer={historyCustomer}
+          onClose={() => setHistoryCustomer(null)}
           onAddFunds={(row) => setFundsCustomer(row)}
         />
       )}
@@ -491,6 +612,7 @@ const Customers = () => {
           anchorEl={actionAnchorEl}
           busy={deleting}
           onView={() => { const row = filteredCustomers.find((r) => r.id === openActionId); if (row) handleView(row); }}
+          onPaymentHistory={() => { const row = filteredCustomers.find((r) => r.id === openActionId); if (row) handlePaymentHistory(row); }}
           onEdit={() => { const row = filteredCustomers.find((r) => r.id === openActionId); if (row) handleEdit(row); }}
           onDelete={() => { const row = filteredCustomers.find((r) => r.id === openActionId); if (row) return handleDelete(row); }}
         />
@@ -563,6 +685,7 @@ const Customers = () => {
           anchorEl={cardActionAnchorEl}
           busy={deleting}
           onView={() => { const row = filteredCustomers.find((r) => r.id === openCardActionId); if (row) handleView(row); }}
+          onPaymentHistory={() => { const row = filteredCustomers.find((r) => r.id === openCardActionId); if (row) handlePaymentHistory(row); }}
           onEdit={() => { const row = filteredCustomers.find((r) => r.id === openCardActionId); if (row) handleEdit(row); }}
           onDelete={() => { const row = filteredCustomers.find((r) => r.id === openCardActionId); if (row) return handleDelete(row); }}
         />
