@@ -438,7 +438,14 @@ const Customers = () => {
     setFundsError(null);
     setFundsSaving(true);
     try {
-      await creditCustomerAccount(fundsCustomer.id, credit);
+      await creditCustomerAccount(
+        fundsCustomer.id,
+        fundsCustomer,
+        credit.amount,
+        credit.paymentMode,
+        credit.note,
+        credit.planPurchaseId
+      );
       setFundsCustomer(null);
     } catch (e) {
       console.error('Credit account failed', e);
