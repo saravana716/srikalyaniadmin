@@ -6,10 +6,6 @@
       "source": "/api/delhivery/cmu/create.json",
       "destination": "/api/delhivery-shipment"
     },
-    {
-      "source": "/expo-push",
-      "destination": "https://exp.host/--/api/v2/push/send"
-    },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }

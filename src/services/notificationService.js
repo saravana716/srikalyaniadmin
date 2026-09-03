@@ -28,8 +28,8 @@ export const sendGoldRateNotification = async (goldRate, silverRate) => {
       data: { goldRate, silverRate },
     };
 
-    // 3. Send via absolute endpoint to bypass Vercel proxy issues
-    const response = await fetch('https://exp.host/--/api/v2/push/send', {
+    // 3. Send via serverless API to bypass CORS
+    const response = await fetch('/api/expo-push', {
       method: 'POST',
       headers: {
         Accept: 'application/json',
@@ -73,7 +73,7 @@ export const sendCustomNotification = async (title, body) => {
       data: { custom: true },
     };
 
-    const response = await fetch('https://exp.host/--/api/v2/push/send', {
+    const response = await fetch('/api/expo-push', {
       method: 'POST',
       headers: {
         Accept: 'application/json',
