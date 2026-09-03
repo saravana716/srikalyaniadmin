@@ -114,31 +114,45 @@ export async function creditPlanPurchaseAmount(planPurchaseId, creditAmount, pay
   const snap = await getDoc(ref);
   if (!snap.exists()) throw new Error('Plan purchase not found');
   const data = snap.data();
-  const current = parseMoney(data.amount ?? data.Amount);
-  const saved = parseMoney(data.savedAmount ?? data.SavedAmount);
+  const baseAmount = Number(data.amount) || 0;
+  const saved = Number(data.savedAmount ?? data.SavedAmount) || 0;
   const add = Number(creditAmount) || 0;
-  const amountAfter = current + add;
   const savedAfter = saved + add;
 
-  let savedWeight = null;
+  // Calculate new installments count
+  const currentInstallments = parseInt(data.paidInstallments) || 0;
+  const installmentsToAdd = baseAmount > 0 ? Math.max(1, Math.floor(add / baseAmount)) : 1;
+  const paidInstallmentsAfter = currentInstallments + installmentsToAdd;
+
+  let newSavedWeight = null;
   try {
     const latestRates = await getLatestMetalRates();
     const { ratePerGram } = pickRateForPlan(data, latestRates);
-    savedWeight = calcSavedWeightGrams(savedAfter || amountAfter, ratePerGram);
+    // Only calculate weight for the NEW amount added, at today's rate
+    const addedWeight = calcSavedWeightGrams(add, ratePerGram);
+    const currentWeight = parseFloat(data.savedWeight) || 0;
+    newSavedWeight = Number((currentWeight + addedWeight).toFixed(3));
   } catch (e) {
     console.warn('Could not compute savedWeight from gold rate', e);
   }
 
   const payload = {
-    amount: amountAfter,
-    Amount: amountAfter,
     savedAmount: savedAfter,
+    paidInstallments: paidInstallmentsAfter,
     lastPaymentMode: paymentMode,
     lastCreditAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
-  if (savedWeight != null) {
-    payload.savedWeight = Number(savedWeight.toFixed(4));
+  if (newSavedWeight != null) {
+    payload.savedWeight = newSavedWeight;
+  }
+
+  // Update status if completed
+  const totalInstallments = data.plan === 'Daily' ? 365 : 11;
+  if (paidInstallmentsAfter >= totalInstallments) {
+    payload.status = 'Closed';
+  } else if (data.status === 'Pending') {
+    payload.status = 'Active';
   }
 
   await updateDoc(ref, payload);

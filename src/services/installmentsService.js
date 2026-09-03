@@ -23,7 +23,9 @@ export function subscribeInstallments(setData) {
   const plain = collection(db, COLLECTION);
 
   const apply = (snapshot) => {
-    const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const list = snapshot.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((d) => !(d.planId && d.planId.startsWith('APP_')));
     list.sort((a, b) => {
       const ta = a.createdAt?.toMillis?.() || Date.parse(a.createdAt || a.paidDate || 0) || 0;
       const tb = b.createdAt?.toMillis?.() || Date.parse(b.createdAt || b.paidDate || 0) || 0;
@@ -34,7 +36,10 @@ export function subscribeInstallments(setData) {
 
   const ordered = query(collection(db, COLLECTION), orderBy('createdAt', 'desc'));
   let unsub = onSnapshot(ordered, (snapshot) => {
-    setData(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
+    const list = snapshot.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((d) => !(d.planId && d.planId.startsWith('APP_')));
+    setData(list);
   }, () => {
     unsub = onSnapshot(plain, apply, () => setData([]));
   });
