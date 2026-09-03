@@ -118,6 +118,7 @@ export async function creditPlanPurchaseAmount(planPurchaseId, creditAmount, pay
   const saved = Number(data.savedAmount ?? data.SavedAmount) || 0;
   const add = Number(creditAmount) || 0;
   const savedAfter = saved + add;
+  const amountAfter = savedAfter;
 
   // Calculate new installments count
   const currentInstallments = parseInt(data.paidInstallments) || 0;
