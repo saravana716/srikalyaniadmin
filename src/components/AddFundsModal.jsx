@@ -23,7 +23,7 @@ const AddFundsModal = ({ customer, onClose, onSubmit, saving, error }) => {
 
   const currentBalance = Number(customer?.accountBalance ?? customer?.amount ?? 0) || 0;
   const selected = plans.find((p) => p.id === planPurchaseId);
-  const selectedPlanAmount = Number(selected?.amount ?? 0) || 0;
+  const selectedSavedAmount = Number(selected?.savedAmount ?? selected?.SavedAmount ?? 0) || 0;
 
   useEffect(() => {
     let cancelled = false;
@@ -84,9 +84,9 @@ const AddFundsModal = ({ customer, onClose, onSubmit, saving, error }) => {
           <p style={styles.balance}>Customer Account: <strong>{formatINR(currentBalance)}</strong></p>
           {selected && (
             <p style={styles.balance}>
-              Selected Plan Amount: <strong>{formatINR(selectedPlanAmount)}</strong>
+              Plan Saved Amount: <strong>{formatINR(selectedSavedAmount)}</strong>
               {' → after add: '}
-              <strong>{formatINR(selectedPlanAmount + (Number(amount) || 0))}</strong>
+              <strong>{formatINR(selectedSavedAmount + (Number(amount) || 0))}</strong>
             </p>
           )}
 
