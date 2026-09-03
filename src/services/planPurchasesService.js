@@ -163,7 +163,7 @@ export async function creditPlanPurchaseAmount(planPurchaseId, creditAmount, pay
     savedAfter,
     savedWeight: payload.savedWeight ?? null,
     planName: data.planName || data.name || '',
-    previousAmount: current,
+    previousAmount: saved,
   };
 }
 
