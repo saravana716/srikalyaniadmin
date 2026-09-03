@@ -185,7 +185,9 @@ export async function creditCustomerAccount(customerId, credit) {
   const snap = await getDoc(ref);
   if (!snap.exists()) throw new Error('Customer not found');
   const data = snap.data();
-  const current = Number(data.accountBalance ?? data.amount ?? 0) || 0;
+  const current = data.accountBalance !== undefined 
+    ? Number(data.accountBalance) 
+    : (data.savedAmount !== undefined ? Number(data.savedAmount) : 0);
   const next = current + amount;
 
   // Update customer account
@@ -239,7 +241,7 @@ export async function creditCustomerAccount(customerId, credit) {
     type: 'credit',
     amount,
     paymentMode: mode,
-    note: note || '',
+    note: credit.note || '',
     balanceAfter: next,
     planPurchaseId: targetPlanId || '',
     planName: planName || '',
@@ -259,7 +261,7 @@ export async function creditCustomerAccount(customerId, credit) {
       planPurchaseId: targetPlanId || '',
       planName: planName || '',
       ledgerId: ledgerRef.id,
-      note: note || '',
+      note: credit.note || '',
     });
   } catch (e) {
     console.error('Failed to sync installment history from customer cash', e);

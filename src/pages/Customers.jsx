@@ -124,7 +124,9 @@ const ViewCustomerModal = ({ customer, onClose, onEdit, onAddFunds, onOpenPaymen
 
   if (!customer) return null;
 
-  const balance = customer.accountBalance ?? customer.amount ?? 0;
+  const balance = customer.accountBalance !== undefined
+    ? Number(customer.accountBalance)
+    : (customer.savedAmount !== undefined ? Number(customer.savedAmount) : 0);
   const weightInfo = savedWeightMeta(balance, rates, customer);
   const rows = [
     { label: 'Customer ID:', value: customer.cusId || '—' },
@@ -438,14 +440,7 @@ const Customers = () => {
     setFundsError(null);
     setFundsSaving(true);
     try {
-      await creditCustomerAccount(
-        fundsCustomer.id,
-        fundsCustomer,
-        credit.amount,
-        credit.paymentMode,
-        credit.note,
-        credit.planPurchaseId
-      );
+      await creditCustomerAccount(fundsCustomer.id, credit);
       setFundsCustomer(null);
     } catch (e) {
       console.error('Credit account failed', e);
@@ -649,9 +644,21 @@ const Customers = () => {
                   <td style={styles.td}>{formatToIST(row.joinedDate)}</td>
                   <td style={styles.td}>{row.name}</td>
                   <td style={styles.td}>{row.password}</td>
-                  <td style={styles.td}>{formatINR(row.accountBalance ?? row.amount ?? 0)}</td>
                   <td style={styles.td}>
-                    {formatSavedWeightForDisplay(row.accountBalance ?? row.amount ?? 0, rates, row)}
+                    {formatINR(
+                      row.accountBalance !== undefined
+                        ? Number(row.accountBalance)
+                        : (row.savedAmount !== undefined ? Number(row.savedAmount) : 0)
+                    )}
+                  </td>
+                  <td style={styles.td}>
+                    {formatSavedWeightForDisplay(
+                      row.accountBalance !== undefined
+                        ? Number(row.accountBalance)
+                        : (row.savedAmount !== undefined ? Number(row.savedAmount) : 0),
+                      rates,
+                      row
+                    )}
                   </td>
                   <td style={styles.td}>{row.plan}</td>
                   <td style={styles.td}>{row.mobile}</td>
@@ -705,10 +712,27 @@ const Customers = () => {
               <div style={styles.cardRow}><span style={styles.cardLabel}>Cus ID</span><span>{row.cusId}</span></div>
               <div style={styles.cardRow}><span style={styles.cardLabel}>Joined Date</span><span>{formatToIST(row.joinedDate)}</span></div>
               <div style={styles.cardRow}><span style={styles.cardLabel}>Name</span><span>{row.name}</span></div>
-              <div style={styles.cardRow}><span style={styles.cardLabel}>Account</span><span>{formatINR(row.accountBalance ?? row.amount ?? 0)}</span></div>
+              <div style={styles.cardRow}>
+                <span style={styles.cardLabel}>Account</span>
+                <span>
+                  {formatINR(
+                    row.accountBalance !== undefined
+                      ? Number(row.accountBalance)
+                      : (row.savedAmount !== undefined ? Number(row.savedAmount) : 0)
+                  )}
+                </span>
+              </div>
               <div style={styles.cardRow}>
                 <span style={styles.cardLabel}>Saved Weight</span>
-                <span>{formatSavedWeightForDisplay(row.accountBalance ?? row.amount ?? 0, rates, row)}</span>
+                <span>
+                  {formatSavedWeightForDisplay(
+                    row.accountBalance !== undefined
+                      ? Number(row.accountBalance)
+                      : (row.savedAmount !== undefined ? Number(row.savedAmount) : 0),
+                    rates,
+                    row
+                  )}
+                </span>
               </div>
               <div style={styles.cardRow}><span style={styles.cardLabel}>Plan</span><span>{row.plan}</span></div>
               <div style={styles.cardRow}><span style={styles.cardLabel}>Mobile</span><span>{row.mobile}</span></div>
