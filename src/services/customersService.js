@@ -239,7 +239,7 @@ export async function creditCustomerAccount(customerId, credit) {
     type: 'credit',
     amount,
     paymentMode: mode,
-    note: credit.note || '',
+    note: note || '',
     balanceAfter: next,
     planPurchaseId: targetPlanId || '',
     planName: planName || '',
@@ -259,7 +259,7 @@ export async function creditCustomerAccount(customerId, credit) {
       planPurchaseId: targetPlanId || '',
       planName: planName || '',
       ledgerId: ledgerRef.id,
-      note: credit.note || '',
+      note: note || '',
     });
   } catch (e) {
     console.error('Failed to sync installment history from customer cash', e);
