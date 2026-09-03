@@ -16,6 +16,7 @@ import {
     MdInventory2,
     MdLocalOffer,
     MdAdminPanelSettings,
+    MdNotifications,
 } from 'react-icons/md';
 
 const Sidebar = ({ isOpen, onClose }) => {
@@ -33,6 +34,7 @@ const Sidebar = ({ isOpen, onClose }) => {
         { name: 'Offers', icon: <MdLocalOffer />, path: '/offers' },
         { name: 'Gold Rate Manage', icon: <MdTrendingUp />, path: '/gold-rate' },
         { name: 'Reports', icon: <MdDescription />, path: '/reports' },
+        { name: 'Notifications', icon: <MdNotifications />, path: '/notifications' },
         { name: 'Admin Accounts', icon: <MdAdminPanelSettings />, path: '/admin-accounts' },
         { name: 'Settings', icon: <MdSettings />, path: '/settings' },
     ];

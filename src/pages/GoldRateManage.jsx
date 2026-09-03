@@ -4,6 +4,7 @@ import Button from '../components/Button';
 import { FiSettings, FiBell, FiMenu } from 'react-icons/fi';
 import { MdKeyboardArrowUp, MdKeyboardArrowDown, MdTrendingUp, MdTrendingDown } from 'react-icons/md';
 import { subscribeGoldRates, addGoldRate as addGoldRateToDb } from '../services/goldRatesService';
+import { sendGoldRateNotification } from '../services/notificationService';
 
 const MAROON = '#801A39';
 const LIGHT_GRAY = '#F0F0F0';
@@ -27,6 +28,7 @@ const GoldRateManage = () => {
   const [goldRateInput, setGoldRateInput] = useState('');
   const [silverRateInput, setSilverRateInput] = useState('');
   const [addError, setAddError] = useState(null);
+  const [addSuccess, setAddSuccess] = useState(false);
   const [adding, setAdding] = useState(false);
   const totalPages = Math.max(1, Math.ceil(goldRates.length / 10));
 
@@ -47,6 +49,14 @@ const GoldRateManage = () => {
     setAdding(true);
     try {
       await addGoldRateToDb({ date: d, goldRate: goldRateInput, silverRate: silverRateInput });
+      // Send Push Notification
+      try {
+        await sendGoldRateNotification(goldRateInput, silverRateInput);
+        setAddSuccess(true);
+        setTimeout(() => setAddSuccess(false), 3000);
+      } catch (notifErr) {
+        console.error('Failed to send push notifications', notifErr);
+      }
       setDate('');
       setGoldRateInput('');
       setSilverRateInput('');
@@ -91,6 +101,7 @@ const GoldRateManage = () => {
             <h3 style={styles.inputCardTitle}>Today&apos;s Date</h3>
             <form onSubmit={handleAdd}>
               {addError && <p style={{ color: '#dc2626', marginBottom: 12, fontSize: 14 }}>{addError}</p>}
+              {addSuccess && <p style={{ color: '#059669', marginBottom: 12, fontSize: 14 }}>Rate added & push notifications sent!</p>}
               <div style={styles.inputGroup}>
                 <label style={styles.inputLabel}>Select Today&apos;s Date</label>
                 <input type="date" style={styles.input} value={date} onChange={(e) => setDate(e.target.value)} />
