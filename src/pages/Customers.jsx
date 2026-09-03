@@ -124,9 +124,12 @@ const ViewCustomerModal = ({ customer, onClose, onEdit, onAddFunds, onOpenPaymen
 
   if (!customer) return null;
 
-  const balance = customer.accountBalance !== undefined
-    ? Number(customer.accountBalance)
-    : (customer.savedAmount !== undefined ? Number(customer.savedAmount) : 0);
+  let balance = 0;
+  if (customer.savedAmount !== undefined || customer.SavedAmount !== undefined) {
+    balance = Math.max(Number(customer.accountBalance || 0), Number(customer.savedAmount ?? customer.SavedAmount ?? 0));
+  } else {
+    balance = Number(customer.accountBalance ?? customer.amount ?? 0);
+  }
   const weightInfo = savedWeightMeta(balance, rates, customer);
   const rows = [
     { label: 'Customer ID:', value: customer.cusId || '—' },
@@ -646,16 +649,16 @@ const Customers = () => {
                   <td style={styles.td}>{row.password}</td>
                   <td style={styles.td}>
                     {formatINR(
-                      row.accountBalance !== undefined
-                        ? Number(row.accountBalance)
-                        : (row.savedAmount !== undefined ? Number(row.savedAmount) : 0)
+                      (row.savedAmount !== undefined || row.SavedAmount !== undefined)
+                        ? Math.max(Number(row.accountBalance || 0), Number(row.savedAmount ?? row.SavedAmount ?? 0))
+                        : Number(row.accountBalance ?? row.amount ?? 0)
                     )}
                   </td>
                   <td style={styles.td}>
                     {formatSavedWeightForDisplay(
-                      row.accountBalance !== undefined
-                        ? Number(row.accountBalance)
-                        : (row.savedAmount !== undefined ? Number(row.savedAmount) : 0),
+                      (row.savedAmount !== undefined || row.SavedAmount !== undefined)
+                        ? Math.max(Number(row.accountBalance || 0), Number(row.savedAmount ?? row.SavedAmount ?? 0))
+                        : Number(row.accountBalance ?? row.amount ?? 0),
                       rates,
                       row
                     )}
@@ -716,9 +719,9 @@ const Customers = () => {
                 <span style={styles.cardLabel}>Account</span>
                 <span>
                   {formatINR(
-                    row.accountBalance !== undefined
-                      ? Number(row.accountBalance)
-                      : (row.savedAmount !== undefined ? Number(row.savedAmount) : 0)
+                    (row.savedAmount !== undefined || row.SavedAmount !== undefined)
+                      ? Math.max(Number(row.accountBalance || 0), Number(row.savedAmount ?? row.SavedAmount ?? 0))
+                      : Number(row.accountBalance ?? row.amount ?? 0)
                   )}
                 </span>
               </div>
@@ -726,9 +729,9 @@ const Customers = () => {
                 <span style={styles.cardLabel}>Saved Weight</span>
                 <span>
                   {formatSavedWeightForDisplay(
-                    row.accountBalance !== undefined
-                      ? Number(row.accountBalance)
-                      : (row.savedAmount !== undefined ? Number(row.savedAmount) : 0),
+                    (row.savedAmount !== undefined || row.SavedAmount !== undefined)
+                      ? Math.max(Number(row.accountBalance || 0), Number(row.savedAmount ?? row.SavedAmount ?? 0))
+                      : Number(row.accountBalance ?? row.amount ?? 0),
                     rates,
                     row
                   )}

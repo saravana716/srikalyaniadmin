@@ -185,19 +185,21 @@ export async function creditCustomerAccount(customerId, credit) {
   const snap = await getDoc(ref);
   if (!snap.exists()) throw new Error('Customer not found');
   const data = snap.data();
-  const current = data.accountBalance !== undefined 
-    ? Number(data.accountBalance) 
-    : (data.savedAmount !== undefined ? Number(data.savedAmount) : 0);
+  let current = 0;
+  if (data.savedAmount !== undefined || data.SavedAmount !== undefined) {
+    current = Math.max(Number(data.accountBalance || 0), Number(data.savedAmount ?? data.SavedAmount ?? 0));
+  } else {
+    current = Number(data.accountBalance ?? data.amount ?? 0);
+  }
   const next = current + amount;
 
-  // Update customer account
-  await updateDoc(ref, {
+  const payload = {
     accountBalance: next,
     amount: next,
     lastCreditAt: serverTimestamp(),
     lastPaymentMode: mode,
     updatedAt: serverTimestamp(),
-  });
+  };
 
   // Sync to plan purchases so Plan Purchases page stays dynamic
   const plans = await findPlanPurchasesForCustomer({
@@ -210,6 +212,7 @@ export async function creditCustomerAccount(customerId, credit) {
   let targetPlanId = credit.planPurchaseId || null;
   let planAmountAfter = null;
   let planName = '';
+  let addedWeight = 0;
 
   if (!targetPlanId && plans.length) {
     const best = pickBestPlanPurchase(plans);
@@ -226,11 +229,16 @@ export async function creditCustomerAccount(customerId, credit) {
     const updated = await creditPlanPurchaseAmount(targetPlanId, amount, mode);
     planAmountAfter = updated.amountAfter;
     planName = updated.planName || '';
+    addedWeight = updated.addedWeight || 0;
   } else {
     throw new Error(
       'No matching Plan Purchase found for this customer. Open Plan Purchases and confirm the customer ID (cusId) matches.'
     );
   }
+
+  payload.savedAmount = planAmountAfter;
+  // Update customer account
+  await updateDoc(ref, payload);
 
   // Persist history
   const ledgerRef = await addDoc(collection(db, LEDGER), {
@@ -262,6 +270,7 @@ export async function creditCustomerAccount(customerId, credit) {
       planName: planName || '',
       ledgerId: ledgerRef.id,
       note: credit.note || '',
+      weight: addedWeight ? `${addedWeight} g` : '0.000 g',
     });
   } catch (e) {
     console.error('Failed to sync installment history from customer cash', e);

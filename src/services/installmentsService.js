@@ -172,6 +172,7 @@ export async function addInstallmentFromCustomerCredit(credit) {
     planName: credit.planName || '',
     ledgerId: credit.ledgerId || '',
     note: credit.note || '',
+    weight: credit.weight || '',
     source: 'customer_cash',
   });
 }

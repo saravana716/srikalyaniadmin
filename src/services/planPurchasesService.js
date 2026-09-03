@@ -126,11 +126,12 @@ export async function creditPlanPurchaseAmount(planPurchaseId, creditAmount, pay
   const paidInstallmentsAfter = currentInstallments + installmentsToAdd;
 
   let newSavedWeight = null;
+  let addedWeight = 0;
   try {
     const latestRates = await getLatestMetalRates();
     const { ratePerGram } = pickRateForPlan(data, latestRates);
     // Only calculate weight for the NEW amount added, at today's rate
-    const addedWeight = calcSavedWeightGrams(add, ratePerGram);
+    addedWeight = calcSavedWeightGrams(add, ratePerGram);
     const currentWeight = parseFloat(data.savedWeight) || 0;
     newSavedWeight = Number((currentWeight + addedWeight).toFixed(3));
   } catch (e) {
@@ -162,6 +163,7 @@ export async function creditPlanPurchaseAmount(planPurchaseId, creditAmount, pay
     amountAfter,
     savedAfter,
     savedWeight: payload.savedWeight ?? null,
+    addedWeight,
     planName: data.planName || data.name || '',
     previousAmount: saved,
   };
