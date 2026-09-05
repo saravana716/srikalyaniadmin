@@ -6,11 +6,15 @@ export const sendGoldRateNotification = async (goldRate, silverRate) => {
     // 1. Fetch all users
     const usersSnapshot = await getDocs(collection(db, 'app_users'));
     const tokens = [];
+    const uniqueTokens = new Set();
 
     usersSnapshot.forEach((doc) => {
       const data = doc.data();
       if (data.expoPushToken && typeof data.expoPushToken === 'string') {
-        tokens.push(data.expoPushToken);
+        if (!uniqueTokens.has(data.expoPushToken)) {
+            uniqueTokens.add(data.expoPushToken);
+            tokens.push(data.expoPushToken);
+        }
       }
     });
 
@@ -52,11 +56,15 @@ export const sendCustomNotification = async (title, body) => {
   try {
     const usersSnapshot = await getDocs(collection(db, 'app_users'));
     const tokens = [];
+    const uniqueTokens = new Set();
 
     usersSnapshot.forEach((doc) => {
       const data = doc.data();
       if (data.expoPushToken && typeof data.expoPushToken === 'string') {
-        tokens.push(data.expoPushToken);
+        if (!uniqueTokens.has(data.expoPushToken)) {
+            uniqueTokens.add(data.expoPushToken);
+            tokens.push(data.expoPushToken);
+        }
       }
     });
 
