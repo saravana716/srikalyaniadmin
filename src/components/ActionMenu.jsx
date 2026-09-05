@@ -8,9 +8,23 @@ const PORTAL_Z_INDEX = 99999;
  * Action dropdown (View, Edit, Delete) rendered in a portal so it appears
  * outside table overflow and above all content. Pass anchorEl (trigger DOM node).
  */
-const ActionMenu = ({ isOpen, onClose, anchorEl, onView, onPaymentHistory, onEdit, onDelete, onCancelChit, busy = false, placement = 'bottom-end' }) => {
+const ActionMenu = ({
+  isOpen,
+  onClose,
+  anchorEl,
+  onView,
+  onPayInstallment,
+  onPaymentHistory,
+  onEdit,
+  onDelete,
+  onCloseAccount,
+  onCancelChit,
+  busy = false,
+  placement = 'bottom-end',
+}) => {
   const menuRef = useRef(null);
   const [position, setPosition] = useState({ top: 0, left: 0 });
+  const handleCloseAccount = onCloseAccount || onCancelChit;
 
   useEffect(() => {
     if (!isOpen || !anchorEl) return;
@@ -25,8 +39,14 @@ const ActionMenu = ({ isOpen, onClose, anchorEl, onView, onPaymentHistory, onEdi
   useEffect(() => {
     if (!isOpen || !anchorEl || !menuRef.current) return;
     const rect = anchorEl.getBoundingClientRect();
-    const menuWidth = onCancelChit || onPaymentHistory ? 150 : 120;
-    const menuHeight = (onCancelChit ? 160 : 120) + (onPaymentHistory ? 36 : 0);
+    const hasExtra = onCloseAccount || onCancelChit || onPaymentHistory || onPayInstallment;
+    const menuWidth = hasExtra ? 160 : 120;
+    let itemsCount = 3; // View, Edit, Delete
+    if (onPayInstallment) itemsCount++;
+    if (onPaymentHistory) itemsCount++;
+    if (onCloseAccount) itemsCount++;
+    if (onCancelChit) itemsCount++;
+    const menuHeight = itemsCount * 36 + 16;
     const gap = 4;
     const padding = 8;
     let top = rect.bottom + gap;
@@ -36,7 +56,7 @@ const ActionMenu = ({ isOpen, onClose, anchorEl, onView, onPaymentHistory, onEdi
     if (top + menuHeight > window.innerHeight - padding) top = rect.top - menuHeight - gap;
     if (top < padding) top = padding;
     setPosition({ top, left });
-  }, [isOpen, anchorEl, placement, onCancelChit, onPaymentHistory]);
+  }, [isOpen, anchorEl, placement, onCloseAccount, onCancelChit, onPaymentHistory, onPayInstallment]);
 
   if (!isOpen) return null;
 
@@ -49,7 +69,7 @@ const ActionMenu = ({ isOpen, onClose, anchorEl, onView, onPaymentHistory, onEdi
         top: position.top,
         left: position.left,
         zIndex: PORTAL_Z_INDEX,
-        minWidth: onCancelChit || onPaymentHistory ? '150px' : '120px',
+        minWidth: onCloseAccount || onCancelChit || onPaymentHistory ? '160px' : '120px',
         backgroundColor: '#fafafa',
         border: `1px solid ${BORDER_GRAY}`,
         borderRadius: '8px',
@@ -60,6 +80,18 @@ const ActionMenu = ({ isOpen, onClose, anchorEl, onView, onPaymentHistory, onEdi
       }}
     >
       <button type="button" className="action-dropdown-item" disabled={busy} onMouseDown={(e) => e.preventDefault()} onClick={() => { if (busy) return; onView?.(); onClose(); }}>View</button>
+      {onPayInstallment && (
+        <button
+          type="button"
+          className="action-dropdown-item"
+          disabled={busy}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => { if (busy) return; onPayInstallment?.(); onClose(); }}
+          style={{ color: '#15803d', fontWeight: 600 }}
+        >
+          + Pay Installment
+        </button>
+      )}
       {onPaymentHistory && (
         <button
           type="button"
@@ -72,6 +104,18 @@ const ActionMenu = ({ isOpen, onClose, anchorEl, onView, onPaymentHistory, onEdi
         </button>
       )}
       <button type="button" className="action-dropdown-item" disabled={busy} onMouseDown={(e) => e.preventDefault()} onClick={() => { if (busy) return; onEdit?.(); onClose(); }}>Edit</button>
+      {onCloseAccount && (
+        <button
+          type="button"
+          className="action-dropdown-item"
+          disabled={busy}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => { if (busy) return; onCloseAccount(); onClose(); }}
+          style={{ color: '#b45309' }}
+        >
+          Close Account
+        </button>
+      )}
       {onCancelChit && (
         <button
           type="button"
@@ -79,7 +123,7 @@ const ActionMenu = ({ isOpen, onClose, anchorEl, onView, onPaymentHistory, onEdi
           disabled={busy}
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => { if (busy) return; onCancelChit(); onClose(); }}
-          style={{ color: '#b45309' }}
+          style={{ color: '#dc2626' }}
         >
           Cancel Chit
         </button>

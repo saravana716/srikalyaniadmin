@@ -6,6 +6,7 @@ import BrandLogo from './BrandLogo';
 import {
     MdDashboard,
     MdPeople,
+    MdSmartphone,
     MdAssignment,
     MdPayment,
     MdTrendingUp,
@@ -16,7 +17,6 @@ import {
     MdInventory2,
     MdLocalOffer,
     MdAdminPanelSettings,
-    MdNotifications,
 } from 'react-icons/md';
 
 const Sidebar = ({ isOpen, onClose }) => {
@@ -27,16 +27,13 @@ const Sidebar = ({ isOpen, onClose }) => {
     const menuItems = [
         { name: 'Dashboard', icon: <MdDashboard />, path: '/dashboard' },
         { name: 'Customers', icon: <MdPeople />, path: '/customers' },
+        { name: 'App Users', icon: <MdSmartphone />, path: '/app-users' },
         { name: 'Chit Fund Plans', icon: <MdAssignment />, path: '/plans' },
         { name: 'Plan Purchases', icon: <MdAssignment />, path: '/plan-purchases' },
         { name: 'Payment', icon: <MdPayment />, path: '/payment' },
         { name: 'Products', icon: <MdInventory2 />, path: '/products' },
-        { name: 'Offers', icon: <MdLocalOffer />, path: '/offers' },
         { name: 'Gold Rate Manage', icon: <MdTrendingUp />, path: '/gold-rate' },
-        { name: 'Reports', icon: <MdDescription />, path: '/reports' },
-        { name: 'Notifications', icon: <MdNotifications />, path: '/notifications' },
         { name: 'Admin Accounts', icon: <MdAdminPanelSettings />, path: '/admin-accounts' },
-        { name: 'Settings', icon: <MdSettings />, path: '/settings' },
     ];
 
     const handleLogout = async () => {

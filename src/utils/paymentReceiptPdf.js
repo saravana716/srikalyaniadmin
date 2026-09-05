@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf';
 import logoUrl from '../assets/sri-kalyani-logo.png';
+import { formatPaidDate } from './dateUtils';
 
 const MAROON = [128, 26, 57];
 const GOLD = [184, 148, 58];
@@ -147,7 +148,7 @@ export async function downloadPaymentReceipt(payment) {
   doc.setTextColor(...INK);
   doc.text(receiptNo, margin + 4, y + 11.5);
   doc.text(
-    now.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+    formatPaidDate(now),
     margin + contentW / 2,
     y + 11.5
   );
@@ -170,8 +171,8 @@ export async function downloadPaymentReceipt(payment) {
   y = row(doc, 'Source', payment.sourceLabel || payment.source, margin, y, contentW);
   y = row(doc, 'Mode', payment.mode, margin, y, contentW);
   y = row(doc, 'Status', payment.status === 'Paid' ? 'Completed' : payment.status, margin, y, contentW);
-  y = row(doc, 'Due Date', payment.dueDate, margin, y, contentW);
-  y = row(doc, 'Paid Date', payment.paidDate || payment.dueDate, margin, y, contentW);
+  y = row(doc, 'Due Date', formatPaidDate(payment.dueDate, { dateOnly: true }), margin, y, contentW);
+  y = row(doc, 'Paid Date', formatPaidDate(payment), margin, y, contentW);
   if (payment.note) {
     y = row(doc, 'Note', payment.note, margin, y, contentW);
   }
@@ -227,7 +228,7 @@ export async function downloadPaymentReceipt(payment) {
   doc.setFontSize(7);
   doc.setTextColor(...MUTED);
   doc.text('Sri Kalyani Jewellery  ·  Payment Receipt  ·  Thank you', margin, footerTop + 5);
-  doc.text(`Generated ${now.toLocaleString('en-IN')}`, pageW - margin, footerTop + 5, { align: 'right' });
+  doc.text(`Generated ${formatPaidDate(now)}`, pageW - margin, footerTop + 5, { align: 'right' });
 
   const safeName = text(payment.customerName || 'customer')
     .replace(/[^a-zA-Z0-9_-]+/g, '_')

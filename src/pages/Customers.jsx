@@ -2,10 +2,32 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Sidebar from '../components/Sidebar';
 import ActionMenu from '../components/ActionMenu';
 import Button from '../components/Button';
-import { FiSearch, FiSettings, FiBell, FiMenu, FiFilter, FiX } from 'react-icons/fi';
+import {
+  FiSearch,
+  FiSettings,
+  FiBell,
+  FiMenu,
+  FiFilter,
+  FiX,
+  FiLayers,
+  FiDollarSign,
+  FiCheckCircle,
+  FiClock,
+  FiCreditCard,
+} from 'react-icons/fi';
 import { MdKeyboardArrowUp, MdKeyboardArrowDown } from 'react-icons/md';
-import { subscribeCustomers, addCustomer as addCustomerToDb, updateCustomer as updateCustomerInDb, deleteCustomer as deleteCustomerFromDb, creditCustomerAccount, subscribeCustomerLedger, subscribeCustomerAllPayments } from '../services/customersService';
-import { formatToIST } from '../utils/dateUtils';
+import {
+  subscribeCustomers,
+  addCustomer as addCustomerToDb,
+  updateCustomer as updateCustomerInDb,
+  deleteCustomer as deleteCustomerFromDb,
+  creditCustomerAccount,
+  subscribeCustomerLedger,
+  subscribeCustomerAllPayments,
+  subscribeCustomerPlans,
+  generateCustomerCusId,
+} from '../services/customersService';
+import { formatToIST, formatPaidDate } from '../utils/dateUtils';
 import { formatINR } from '../utils/currencyUtils';
 import AddFundsModal from '../components/AddFundsModal';
 import CustomerPaymentHistoryModal from '../components/CustomerPaymentHistoryModal';
@@ -20,6 +42,7 @@ const DEFAULT_PLANS = ['Daily', 'Weekly', 'Monthly'];
 
 const AddEditCustomerModal = ({ customer, onClose, onSave, error, saving }) => {
   const isEdit = !!customer;
+  const [cusId, setCusId] = useState(customer?.cusId || (isEdit ? '' : generateCustomerCusId()));
   const [name, setName] = useState(customer?.name ?? '');
   const [password, setPassword] = useState(customer?.password ?? '');
   const [amount, setAmount] = useState(customer?.amount ?? '');
@@ -29,7 +52,17 @@ const AddEditCustomerModal = ({ customer, onClose, onSave, error, saving }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (saving) return;
-    await onSave({ name, password, amount: Number(amount) || 0, plan, mobile }, customer?.id);
+    await onSave(
+      {
+        cusId: (cusId && cusId.trim()) || generateCustomerCusId(),
+        name,
+        password,
+        amount: Number(amount) || 0,
+        plan,
+        mobile,
+      },
+      customer?.id
+    );
   };
 
   return (
@@ -43,17 +76,45 @@ const AddEditCustomerModal = ({ customer, onClose, onSave, error, saving }) => {
         </div>
         <form onSubmit={handleSubmit} style={styles.form}>
           {error && <p style={{ color: '#dc2626', marginBottom: 12, fontSize: 14 }}>{error}</p>}
+          <div style={styles.formGroup}>
+            <label style={styles.formLabel}>Customer ID</label>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                type="text"
+                value={cusId}
+                onChange={(e) => setCusId(e.target.value)}
+                style={{ ...styles.formInput, flex: 1 }}
+                placeholder="e.g. kalyani62868055"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setCusId(generateCustomerCusId())}
+                title="Generate new Customer ID"
+                style={{
+                  padding: '8px 12px',
+                  fontSize: 13,
+                  border: '1px solid #801A39',
+                  color: '#801A39',
+                  borderRadius: 6,
+                  background: '#fff',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  fontWeight: 500,
+                }}
+              >
+                {isEdit ? 'New Format' : 'Regenerate'}
+              </button>
+            </div>
+            <span style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>
+              Format: kalyani followed by 8 digits (e.g. kalyani62868055)
+            </span>
+          </div>
           {isEdit && (
-            <>
-              <div style={styles.formGroup}>
-                <label style={styles.formLabel}>Customer ID</label>
-                <input type="text" value={customer.cusId || ''} style={{ ...styles.formInput, backgroundColor: '#f3f4f6' }} readOnly />
-              </div>
-              <div style={styles.formGroup}>
-                <label style={styles.formLabel}>Joined Date (IST)</label>
-                <input type="text" value={formatToIST(customer.joinedDate)} style={{ ...styles.formInput, backgroundColor: '#f3f4f6' }} readOnly />
-              </div>
-            </>
+            <div style={styles.formGroup}>
+              <label style={styles.formLabel}>Joined Date (IST)</label>
+              <input type="text" value={formatToIST(customer.joinedDate)} style={{ ...styles.formInput, backgroundColor: '#f3f4f6' }} readOnly />
+            </div>
           )}
           <div style={styles.formGroup}>
             <label style={styles.formLabel}>Name</label>
@@ -106,30 +167,33 @@ const AddEditCustomerModal = ({ customer, onClose, onSave, error, saving }) => {
   );
 };
 
+function normalizePlanName(str) {
+  return String(str || '').trim().toLowerCase().replace(/[\s-_]+/g, '');
+}
+
 const ViewCustomerModal = ({ customer, onClose, onEdit, onAddFunds, onOpenPaymentHistory }) => {
   const [ledger, setLedger] = useState([]);
   const [allPayments, setAllPayments] = useState([]);
-  const [historyTab, setHistoryTab] = useState('all'); // 'all' | 'cash'
+  const [customerPlans, setCustomerPlans] = useState([]);
+  const [selectedPlanKey, setSelectedPlanKey] = useState('all');
+  const [historySource, setHistorySource] = useState('all'); // 'all' | 'installment' | 'cash' | 'payment'
   const { rates } = useLatestMetalRates();
 
   useEffect(() => {
     if (!customer?.id) return undefined;
     const unsubLedger = subscribeCustomerLedger(customer.id, setLedger);
     const unsubAll = subscribeCustomerAllPayments(customer, setAllPayments);
+    const unsubPlans = subscribeCustomerPlans(customer, setCustomerPlans);
     return () => {
       if (typeof unsubLedger === 'function') unsubLedger();
       if (typeof unsubAll === 'function') unsubAll();
+      if (typeof unsubPlans === 'function') unsubPlans();
     };
   }, [customer?.id, customer?.cusId]);
 
   if (!customer) return null;
 
-  let balance = 0;
-  if (customer.savedAmount !== undefined || customer.SavedAmount !== undefined) {
-    balance = Math.max(Number(customer.accountBalance || 0), Number(customer.savedAmount ?? customer.SavedAmount ?? 0));
-  } else {
-    balance = Number(customer.accountBalance ?? customer.amount ?? 0);
-  }
+  const balance = customer.accountBalance ?? customer.amount ?? 0;
   const weightInfo = savedWeightMeta(balance, rates, customer);
   const rows = [
     { label: 'Customer ID:', value: customer.cusId || '—' },
@@ -143,22 +207,150 @@ const ViewCustomerModal = ({ customer, onClose, onEdit, onAddFunds, onOpenPaymen
         ? `${weightInfo.label} (${weightInfo.hint})`
         : weightInfo.hint,
     },
-    { label: 'Plan:', value: customer.plan },
+    { label: 'Primary Plan:', value: customer.plan || '—' },
     { label: 'Mobile Number:', value: customer.mobile },
     { label: 'Last Payment Mode:', value: customer.lastPaymentMode || '—' },
   ];
 
   const formatLedgerTime = (ts) => {
-    if (!ts) return '—';
-    if (typeof ts?.toDate === 'function') return formatToIST(ts.toDate().toISOString());
-    return formatToIST(ts);
+    return formatPaidDate(ts);
   };
+
+  // Build the list of available plans for this customer
+  const availablePlans = useMemo(() => {
+    const map = new Map();
+
+    // 1. From enrolled customerPlans
+    customerPlans.forEach((p) => {
+      const name = (p.planName || p.name || 'Scheme Plan').trim();
+      const norm = normalizePlanName(name);
+      if (!norm) return;
+      map.set(norm, {
+        id: p.id,
+        normKey: norm,
+        name,
+        planType: p.plan || p.type || customer?.plan || 'Monthly',
+        status: p.status || 'Active',
+        savedAmount: p.savedAmount ?? p.amount ?? 0,
+        savedWeight: p.savedWeight || null,
+        paidInstallments: p.paidInstallments ?? 0,
+        durationMonths: p.durationMonths || 11,
+        planPurchase: p,
+      });
+    });
+
+    // 2. From payment records (if any payment has a plan name not in planPurchases)
+    allPayments.forEach((pay) => {
+      const payPlan = (pay.chitPlan || pay.planName || '').trim();
+      const norm = normalizePlanName(payPlan);
+      if (norm && !map.has(norm)) {
+        map.set(norm, {
+          id: pay.planId || pay.planPurchaseId || norm,
+          normKey: norm,
+          name: payPlan,
+          planType: customer?.plan || 'Monthly',
+          status: 'Active',
+          savedAmount: 0,
+          savedWeight: null,
+          paidInstallments: 0,
+          durationMonths: 11,
+          planPurchase: null,
+        });
+      }
+    });
+
+    // 3. Fallback: customer primary plan
+    if (map.size === 0 && customer?.plan) {
+      const norm = normalizePlanName(customer.plan);
+      map.set(norm, {
+        id: norm,
+        normKey: norm,
+        name: `${customer.plan} Plan`,
+        planType: customer.plan,
+        status: 'Active',
+        savedAmount: customer.accountBalance ?? customer.amount ?? 0,
+        savedWeight: null,
+        paidInstallments: 0,
+        durationMonths: 11,
+        planPurchase: null,
+      });
+    }
+
+    // Convert map to array and calculate per-plan payment totals
+    return Array.from(map.values()).map((p) => {
+      const planPayments = allPayments.filter((item) => {
+        const itemPlan = normalizePlanName(item.chitPlan || item.planName);
+        if (itemPlan && itemPlan === p.normKey) return true;
+        if (p.id && (item.planId === p.id || item.planPurchaseId === p.id || item.raw?.planId === p.id || item.raw?.planPurchaseId === p.id)) return true;
+        return false;
+      });
+
+      const totalPaid = planPayments.reduce((sum, item) => {
+        const val = Number(item.paidAmount ?? item.amount ?? 0) || 0;
+        return sum + val;
+      }, 0);
+
+      return {
+        ...p,
+        count: planPayments.length,
+        totalPaid,
+      };
+    });
+  }, [customerPlans, allPayments, customer]);
+
+  // Selected active plan
+  const activePlan = useMemo(() => {
+    if (selectedPlanKey === 'all') return null;
+    return availablePlans.find((p) => p.normKey === selectedPlanKey || p.id === selectedPlanKey) || null;
+  }, [selectedPlanKey, availablePlans]);
+
+  // Filter payments strictly by selected plan
+  const planFilteredPayments = useMemo(() => {
+    if (!activePlan) return allPayments;
+    return allPayments.filter((item) => {
+      const itemPlan = normalizePlanName(item.chitPlan || item.planName);
+      if (itemPlan && itemPlan === activePlan.normKey) return true;
+      if (activePlan.id && (item.planId === activePlan.id || item.planPurchaseId === activePlan.id || item.raw?.planId === activePlan.id || item.raw?.planPurchaseId === activePlan.id)) return true;
+      return false;
+    });
+  }, [allPayments, activePlan]);
+
+  // Filter further by source
+  const displayPayments = useMemo(() => {
+    return planFilteredPayments.filter((item) => {
+      if (historySource === 'installment') return item.source === 'installment';
+      if (historySource === 'cash') return item.source === 'customer_cash';
+      if (historySource === 'payment') return item.source === 'payment';
+      return true;
+    });
+  }, [planFilteredPayments, historySource]);
+
+  const installmentCount = useMemo(() => {
+    return planFilteredPayments.filter((p) => p.source === 'installment').length;
+  }, [planFilteredPayments]);
+
+  const cashCount = useMemo(() => {
+    return planFilteredPayments.filter((p) => p.source === 'customer_cash').length;
+  }, [planFilteredPayments]);
+
+  const directPaymentCount = useMemo(() => {
+    return planFilteredPayments.filter((p) => p.source === 'payment').length;
+  }, [planFilteredPayments]);
+
+  const totalAllPaymentsPaid = useMemo(() => {
+    return allPayments.reduce((sum, item) => sum + (Number(item.paidAmount ?? item.amount ?? 0) || 0), 0);
+  }, [allPayments]);
 
   return (
     <div style={styles.viewOverlay} className="view-more-modal-overlay" onClick={onClose}>
-      <div style={{ ...styles.viewPanel, maxWidth: '680px' }} className="view-more-modal-box" onClick={(e) => e.stopPropagation()}>
+      <div style={{ ...styles.viewPanel, maxWidth: '820px' }} className="view-more-modal-box" onClick={(e) => e.stopPropagation()}>
         <div style={styles.modalHeader}>
-          <h2 style={styles.modalTitle}>Customer Details</h2>
+          <div>
+            <h2 style={styles.modalTitle}>Customer Details</h2>
+            <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '2px' }}>
+              <strong>{customer.name}</strong> {customer.cusId ? `(${customer.cusId})` : ''} · {customer.mobile}
+            </div>
+          </div>
           <button type="button" style={styles.modalClose} onClick={onClose} aria-label="Close">
             <FiX size={24} />
           </button>
@@ -174,41 +366,267 @@ const ViewCustomerModal = ({ customer, onClose, onEdit, onAddFunds, onOpenPaymen
             ))}
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 24, marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
-            <div style={{ display: 'flex', gap: 8 }}>
+          {/* Customer Enrolled Schemes Cards */}
+          {customerPlans.length > 0 && (
+            <div style={{ marginTop: 24, marginBottom: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <h3 style={{ ...styles.modalSectionTitle, margin: 0 }}>
+                  Enrolled Chit Schemes ({customerPlans.length})
+                </h3>
+                <span style={{ fontSize: '12px', color: '#6b7280' }}>
+                  Click a scheme to filter its payment history
+                </span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '10px' }}>
+                {customerPlans.map((p) => {
+                  const pName = p.planName || p.name || 'Scheme Plan';
+                  const norm = normalizePlanName(pName);
+                  const isSelected = selectedPlanKey === norm;
+                  const pSaved = p.savedAmount ?? p.amount ?? 0;
+                  const pStatus = p.status || 'Active';
+                  return (
+                    <div
+                      key={p.id}
+                      onClick={() => setSelectedPlanKey(isSelected ? 'all' : norm)}
+                      style={{
+                        padding: '12px 14px',
+                        borderRadius: '8px',
+                        border: isSelected ? `2px solid ${MAROON}` : `1px solid ${BORDER_GRAY}`,
+                        backgroundColor: isSelected ? '#fdf2f4' : '#f8fafc',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '6px',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <strong style={{ fontSize: '13px', color: isSelected ? MAROON : '#1e293b' }}>
+                          {pName}
+                        </strong>
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            fontWeight: '600',
+                            padding: '2px 8px',
+                            borderRadius: '999px',
+                            backgroundColor: pStatus.toLowerCase() === 'active' ? '#dcfce7' : '#fef3c7',
+                            color: pStatus.toLowerCase() === 'active' ? '#15803d' : '#b45309',
+                          }}
+                        >
+                          {pStatus}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#64748b' }}>
+                        <span>Installments: <strong>{p.paidInstallments ?? 0} / {p.durationMonths || 11}</strong></span>
+                        <span>Saved: <strong style={{ color: '#16a34a' }}>{formatINR(pSaved)}</strong></span>
+                      </div>
+                      {p.savedWeight ? (
+                        <div style={{ fontSize: '11px', color: '#64748b' }}>
+                          Saved Gold Weight: <strong>{p.savedWeight} g</strong>
+                        </div>
+                      ) : null}
+                      <div style={{ marginTop: '2px', fontSize: '11px', fontWeight: '700', color: isSelected ? MAROON : '#4b5563' }}>
+                        {isSelected ? '✓ Filter Active (Showing Payments Below)' : 'Click to Filter Payments ↓'}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Interactive Plan Selector Bar */}
+          <div style={{ marginTop: 24, marginBottom: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px', fontSize: '12px', fontWeight: '700', color: MAROON, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              <FiLayers size={14} />
+              <span>Customer Plans (Filter Payment History by Plan):</span>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
               <button
                 type="button"
+                onClick={() => setSelectedPlanKey('all')}
                 style={{
-                  padding: '6px 14px',
-                  borderRadius: '6px',
-                  border: `1px solid ${historyTab === 'all' ? MAROON : BORDER_GRAY}`,
-                  backgroundColor: historyTab === 'all' ? MAROON : '#fff',
-                  color: historyTab === 'all' ? '#fff' : '#374151',
-                  fontSize: '13px',
-                  fontWeight: '600',
+                  padding: '8px 14px',
+                  borderRadius: '8px',
+                  border: `1px solid ${selectedPlanKey === 'all' ? MAROON : BORDER_GRAY}`,
+                  backgroundColor: selectedPlanKey === 'all' ? MAROON : '#fff',
+                  color: selectedPlanKey === 'all' ? '#fff' : '#374151',
                   cursor: 'pointer',
+                  textAlign: 'left',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '2px',
+                  boxShadow: selectedPlanKey === 'all' ? '0 2px 8px rgba(128, 26, 57, 0.25)' : 'none',
+                  transition: 'all 0.15s ease',
                 }}
-                onClick={() => setHistoryTab('all')}
               >
-                All Payment History ({allPayments.length})
+                <div style={{ fontWeight: '700', fontSize: '13px' }}>All Plans Combined</div>
+                <div style={{ fontSize: '11px', opacity: 0.85 }}>
+                  {allPayments.length} records · {formatINR(totalAllPaymentsPaid)}
+                </div>
               </button>
+              {availablePlans.map((p) => {
+                const isCurrent = selectedPlanKey === p.normKey;
+                return (
+                  <button
+                    key={p.normKey}
+                    type="button"
+                    onClick={() => setSelectedPlanKey(p.normKey)}
+                    style={{
+                      padding: '8px 14px',
+                      borderRadius: '8px',
+                      border: `1px solid ${isCurrent ? MAROON : BORDER_GRAY}`,
+                      backgroundColor: isCurrent ? MAROON : '#fff',
+                      color: isCurrent ? '#fff' : '#374151',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '2px',
+                      boxShadow: isCurrent ? '0 2px 8px rgba(128, 26, 57, 0.25)' : 'none',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontWeight: '700', fontSize: '13px' }}>{p.name}</span>
+                      <span
+                        style={{
+                          fontSize: '10px',
+                          fontWeight: '700',
+                          padding: '1px 5px',
+                          borderRadius: '4px',
+                          backgroundColor: isCurrent ? 'rgba(255,255,255,0.25)' : '#dcfce7',
+                          color: isCurrent ? '#fff' : '#15803d',
+                        }}
+                      >
+                        {p.status}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '11px', opacity: 0.85 }}>
+                      {p.count} record{p.count === 1 ? '' : 's'} · {formatINR(p.totalPaid)}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Active Plan Focus Banner */}
+          {activePlan && (
+            <div
+              style={{
+                backgroundColor: '#fdf2f4',
+                border: '1px solid #fecdd3',
+                borderRadius: '8px',
+                padding: '10px 14px',
+                marginBottom: '14px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '8px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <FiCheckCircle size={18} color={MAROON} />
+                <span style={{ fontSize: '13px', color: '#881337', fontWeight: '600' }}>
+                  Showing payments for: <strong>{activePlan.name}</strong>
+                  {activePlan.savedAmount ? ` · Plan Saved: ${formatINR(activePlan.savedAmount)}` : ''}
+                  {activePlan.savedWeight ? ` · ${activePlan.savedWeight} g` : ''}
+                  {activePlan.paidInstallments != null ? ` · (${activePlan.paidInstallments}/${activePlan.durationMonths} Installments)` : ''}
+                </span>
+              </div>
               <button
                 type="button"
+                onClick={() => setSelectedPlanKey('all')}
                 style={{
-                  padding: '6px 14px',
-                  borderRadius: '6px',
-                  border: `1px solid ${historyTab === 'cash' ? MAROON : BORDER_GRAY}`,
-                  backgroundColor: historyTab === 'cash' ? MAROON : '#fff',
-                  color: historyTab === 'cash' ? '#fff' : '#374151',
-                  fontSize: '13px',
-                  fontWeight: '600',
+                  background: 'none',
+                  border: 'none',
+                  color: MAROON,
+                  fontSize: '12px',
+                  fontWeight: '700',
                   cursor: 'pointer',
+                  textDecoration: 'underline',
+                  padding: 0,
                 }}
-                onClick={() => setHistoryTab('cash')}
               >
-                Add Cash History ({ledger.length})
+                Show All Plans (Reset)
               </button>
             </div>
+          )}
+
+          {/* Source Tabs & Actions */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  border: `1px solid ${historySource === 'all' ? MAROON : BORDER_GRAY}`,
+                  backgroundColor: historySource === 'all' ? MAROON : '#fff',
+                  color: historySource === 'all' ? '#fff' : '#374151',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                }}
+                onClick={() => setHistorySource('all')}
+              >
+                All ({planFilteredPayments.length})
+              </button>
+              <button
+                type="button"
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  border: `1px solid ${historySource === 'installment' ? MAROON : BORDER_GRAY}`,
+                  backgroundColor: historySource === 'installment' ? MAROON : '#fff',
+                  color: historySource === 'installment' ? '#fff' : '#374151',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                }}
+                onClick={() => setHistorySource('installment')}
+              >
+                Installments ({installmentCount})
+              </button>
+              <button
+                type="button"
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  border: `1px solid ${historySource === 'cash' ? MAROON : BORDER_GRAY}`,
+                  backgroundColor: historySource === 'cash' ? MAROON : '#fff',
+                  color: historySource === 'cash' ? '#fff' : '#374151',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                }}
+                onClick={() => setHistorySource('cash')}
+              >
+                Add Cash ({cashCount})
+              </button>
+              {directPaymentCount > 0 && (
+                <button
+                  type="button"
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    border: `1px solid ${historySource === 'payment' ? MAROON : BORDER_GRAY}`,
+                    backgroundColor: historySource === 'payment' ? MAROON : '#fff',
+                    color: historySource === 'payment' ? '#fff' : '#374151',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => setHistorySource('payment')}
+                >
+                  Direct Payments ({directPaymentCount})
+                </button>
+              )}
+            </div>
+
             {onOpenPaymentHistory && (
               <button
                 type="button"
@@ -216,89 +634,99 @@ const ViewCustomerModal = ({ customer, onClose, onEdit, onAddFunds, onOpenPaymen
                   background: 'none',
                   border: 'none',
                   color: MAROON,
-                  fontSize: '13px',
-                  fontWeight: '600',
+                  fontSize: '12px',
+                  fontWeight: '700',
                   cursor: 'pointer',
                   textDecoration: 'underline',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
                 }}
                 onClick={() => {
                   onClose();
-                  onOpenPaymentHistory(customer);
+                  onOpenPaymentHistory(customer, activePlan ? activePlan.normKey : 'all');
                 }}
               >
-                Full Payment View →
+                Full Payment View ↗
               </button>
             )}
           </div>
 
-          {historyTab === 'all' ? (
-            allPayments.length === 0 ? (
-              <p style={{ color: '#6b7280', fontSize: 14, margin: 0 }}>No payments recorded yet.</p>
-            ) : (
-              <div style={styles.ledgerList}>
-                {allPayments.map((entry) => {
-                  const isCash = entry.source === 'customer_cash';
-                  const isInstallment = entry.source === 'installment';
-                  return (
-                    <div key={entry.id} style={styles.ledgerItem}>
-                      <div style={styles.ledgerTop}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <strong style={{ color: '#16a34a' }}>
-                            + {formatINR(entry.paidAmount ?? entry.amount ?? 0)}
-                          </strong>
-                          <span
-                            style={{
-                              fontSize: '11px',
-                              padding: '2px 6px',
-                              borderRadius: '4px',
-                              fontWeight: '600',
-                              backgroundColor: isCash ? '#fef3c7' : isInstallment ? '#e0e7ff' : '#f3e8ff',
-                              color: isCash ? '#92400e' : isInstallment ? '#3730a3' : '#6b21a8',
-                            }}
-                          >
-                            {entry.sourceLabel || (isCash ? 'Add Cash' : isInstallment ? 'Installment' : 'Payment')}
-                          </span>
-                        </div>
-                        <span style={styles.ledgerMode}>{entry.mode || entry.paymentMode || 'Cash'}</span>
-                      </div>
-                      <div style={styles.ledgerMeta}>
-                        {formatLedgerTime(entry.createdAt || entry.paidDate)}
-                        {entry.chitPlan || entry.planName ? ` · ${entry.chitPlan || entry.planName}` : ''}
-                        {entry.status ? ` · ${entry.status}` : ''}
-                      </div>
-                      {entry.note ? <div style={styles.ledgerNote}>{entry.note}</div> : null}
-                    </div>
-                  );
-                })}
-              </div>
-            )
+          {/* Payment History List */}
+          {displayPayments.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '24px 16px', backgroundColor: '#f9fafb', borderRadius: '8px', border: `1px solid ${BORDER_GRAY}` }}>
+              <FiClock size={28} color="#9ca3af" />
+              <p style={{ color: '#6b7280', fontSize: 13, margin: '8px 0 0 0' }}>
+                {activePlan
+                  ? `No payment records found for "${activePlan.name}" in this category.`
+                  : 'No payment records found for this customer.'}
+              </p>
+            </div>
           ) : (
-            ledger.length === 0 ? (
-              <p style={{ color: '#6b7280', fontSize: 14, margin: 0 }}>No cash additions yet.</p>
-            ) : (
-              <div style={styles.ledgerList}>
-                {ledger.map((entry) => (
-                  <div key={entry.id} style={styles.ledgerItem}>
+            <div style={{ ...styles.ledgerList, maxHeight: '320px' }}>
+              {displayPayments.map((entry) => {
+                const isCash = entry.source === 'customer_cash';
+                const isInstallment = entry.source === 'installment';
+                return (
+                  <div key={entry.id} style={{ ...styles.ledgerItem, padding: '10px 14px' }}>
                     <div style={styles.ledgerTop}>
-                      <strong style={{ color: '#16a34a' }}>+ {formatINR(entry.amount)}</strong>
-                      <span style={styles.ledgerMode}>{entry.paymentMode || 'Cash'}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <strong style={{ color: '#16a34a', fontSize: '14px' }}>
+                          + {formatINR(entry.paidAmount ?? entry.amount ?? 0)}
+                        </strong>
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            padding: '2px 7px',
+                            borderRadius: '4px',
+                            fontWeight: '600',
+                            backgroundColor: isCash ? '#fef3c7' : isInstallment ? '#e0e7ff' : '#f3e8ff',
+                            color: isCash ? '#92400e' : isInstallment ? '#3730a3' : '#6b21a8',
+                          }}
+                        >
+                          {entry.sourceLabel || (isCash ? 'Add Cash' : isInstallment ? 'Installment' : 'Payment')}
+                        </span>
+                        {entry.chitPlan || entry.planName ? (
+                          <span style={{ fontSize: '12px', fontWeight: '600', color: '#1f2937' }}>
+                            {entry.chitPlan || entry.planName}
+                          </span>
+                        ) : null}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={styles.ledgerMode}>{entry.mode || entry.paymentMode || 'Cash'}</span>
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            fontWeight: '600',
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            backgroundColor: '#dcfce7',
+                            color: '#15803d',
+                          }}
+                        >
+                          {entry.status === 'Paid' ? 'Completed' : entry.status || 'Completed'}
+                        </span>
+                      </div>
                     </div>
-                    <div style={styles.ledgerMeta}>
-                      {formatLedgerTime(entry.createdAt)}
-                      {entry.planName ? ` · ${entry.planName}` : ''}
-                      {entry.balanceAfter != null ? ` · Bal ${formatINR(entry.balanceAfter)}` : ''}
+                    <div style={{ ...styles.ledgerMeta, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
+                      <span style={{ fontWeight: '500', color: '#374151' }}>
+                        Paid Date: {formatLedgerTime(entry)}
+                      </span>
+                      {entry.installmentNo ? (
+                        <span style={{ color: '#6b7280' }}>Installment #{entry.installmentNo}</span>
+                      ) : null}
                     </div>
-                    {entry.note ? <div style={styles.ledgerNote}>{entry.note}</div> : null}
+                    {entry.note ? <div style={{ ...styles.ledgerNote, marginTop: 4 }}>Note: {entry.note}</div> : null}
                   </div>
-                ))}
-              </div>
-            )
+                );
+              })}
+            </div>
           )}
         </div>
         <div style={styles.modalFooter} className="app-modal-footer">
           <Button type="button" variant="secondary" onClick={onClose}>Close</Button>
-          <Button type="button" onClick={() => { onClose(); onAddFunds?.(customer); }}>Add Cash / Account</Button>
-          <Button type="button" onClick={() => { onClose(); onEdit(customer); }}>Edit</Button>
+          <Button type="button" onClick={() => { onClose(); onAddFunds?.(customer); }}>+ Add Cash / Account</Button>
+          <Button type="button" onClick={() => { onClose(); onEdit(customer); }}>Edit Customer</Button>
         </div>
       </div>
     </div>
@@ -316,6 +744,7 @@ const Customers = () => {
   const [viewCustomer, setViewCustomer] = useState(null);
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [historyCustomer, setHistoryCustomer] = useState(null);
+  const [historyPlan, setHistoryPlan] = useState('all');
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saveError, setSaveError] = useState(null);
@@ -331,11 +760,21 @@ const Customers = () => {
   const { rates } = useLatestMetalRates();
 
   useEffect(() => {
+    let isMounted = true;
     const unsub = subscribeCustomers((list) => {
-      setCustomers(list.map((row, i) => ({ ...row, sno: i + 1 })));
-      setLoading(false);
+      if (isMounted) {
+        setCustomers(list.map((row, i) => ({ ...row, sno: i + 1 })));
+        setLoading(false);
+      }
     });
-    return () => unsub();
+    return () => {
+      isMounted = false;
+      try {
+        if (typeof unsub === 'function') unsub();
+      } catch (e) {
+        console.warn('Customers unsub error:', e);
+      }
+    };
   }, []);
 
   const planOptions = useMemo(() => {
@@ -394,8 +833,9 @@ const Customers = () => {
     setViewCustomer(row);
   };
 
-  const handlePaymentHistory = (row) => {
+  const handlePaymentHistory = (row, planName = 'all') => {
     closeMenus();
+    setHistoryPlan(planName || 'all');
     setHistoryCustomer(row);
   };
 
@@ -483,13 +923,17 @@ const Customers = () => {
           onClose={() => setViewCustomer(null)}
           onEdit={(row) => setEditingCustomer(row)}
           onAddFunds={(row) => setFundsCustomer(row)}
-          onOpenPaymentHistory={(row) => setHistoryCustomer(row)}
+          onOpenPaymentHistory={(cust, planName) => handlePaymentHistory(cust, planName)}
         />
       )}
       {historyCustomer && (
         <CustomerPaymentHistoryModal
           customer={historyCustomer}
-          onClose={() => setHistoryCustomer(null)}
+          initialPlan={historyPlan}
+          onClose={() => {
+            setHistoryCustomer(null);
+            setHistoryPlan('all');
+          }}
           onAddFunds={(row) => setFundsCustomer(row)}
         />
       )}
@@ -617,7 +1061,7 @@ const Customers = () => {
           anchorEl={actionAnchorEl}
           busy={deleting}
           onView={() => { const row = filteredCustomers.find((r) => r.id === openActionId); if (row) handleView(row); }}
-          onPaymentHistory={() => { const row = filteredCustomers.find((r) => r.id === openActionId); if (row) handlePaymentHistory(row); }}
+          onPaymentHistory={() => { const row = filteredCustomers.find((r) => r.id === openActionId); if (row) handlePaymentHistory(row, row.plan || 'all'); }}
           onEdit={() => { const row = filteredCustomers.find((r) => r.id === openActionId); if (row) handleEdit(row); }}
           onDelete={() => { const row = filteredCustomers.find((r) => r.id === openActionId); if (row) return handleDelete(row); }}
         />
@@ -647,23 +1091,33 @@ const Customers = () => {
                   <td style={styles.td}>{formatToIST(row.joinedDate)}</td>
                   <td style={styles.td}>{row.name}</td>
                   <td style={styles.td}>{row.password}</td>
+                  <td style={styles.td}>{formatINR(row.accountBalance ?? row.amount ?? 0)}</td>
                   <td style={styles.td}>
-                    {formatINR(
-                      (row.savedAmount !== undefined || row.SavedAmount !== undefined)
-                        ? Math.max(Number(row.accountBalance || 0), Number(row.savedAmount ?? row.SavedAmount ?? 0))
-                        : Number(row.accountBalance ?? row.amount ?? 0)
-                    )}
+                    {formatSavedWeightForDisplay(row.accountBalance ?? row.amount ?? 0, rates, row)}
                   </td>
                   <td style={styles.td}>
-                    {formatSavedWeightForDisplay(
-                      (row.savedAmount !== undefined || row.SavedAmount !== undefined)
-                        ? Math.max(Number(row.accountBalance || 0), Number(row.savedAmount ?? row.SavedAmount ?? 0))
-                        : Number(row.accountBalance ?? row.amount ?? 0),
-                      rates,
-                      row
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => handlePaymentHistory(row, row.plan)}
+                      title={`Click to view ${row.plan} plan payment history`}
+                      style={{
+                        background: '#fce7f0',
+                        color: MAROON,
+                        border: '1px solid #fbcfe8',
+                        borderRadius: '999px',
+                        padding: '3px 10px',
+                        fontSize: '12px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      {row.plan}
+                    </button>
                   </td>
-                  <td style={styles.td}>{row.plan}</td>
                   <td style={styles.td}>{row.mobile}</td>
                   <td style={styles.tdAction}>
                     <div style={styles.actionCellWrap}>
@@ -702,7 +1156,7 @@ const Customers = () => {
           anchorEl={cardActionAnchorEl}
           busy={deleting}
           onView={() => { const row = filteredCustomers.find((r) => r.id === openCardActionId); if (row) handleView(row); }}
-          onPaymentHistory={() => { const row = filteredCustomers.find((r) => r.id === openCardActionId); if (row) handlePaymentHistory(row); }}
+          onPaymentHistory={() => { const row = filteredCustomers.find((r) => r.id === openCardActionId); if (row) handlePaymentHistory(row, row.plan || 'all'); }}
           onEdit={() => { const row = filteredCustomers.find((r) => r.id === openCardActionId); if (row) handleEdit(row); }}
           onDelete={() => { const row = filteredCustomers.find((r) => r.id === openCardActionId); if (row) return handleDelete(row); }}
         />
@@ -715,29 +1169,31 @@ const Customers = () => {
               <div style={styles.cardRow}><span style={styles.cardLabel}>Cus ID</span><span>{row.cusId}</span></div>
               <div style={styles.cardRow}><span style={styles.cardLabel}>Joined Date</span><span>{formatToIST(row.joinedDate)}</span></div>
               <div style={styles.cardRow}><span style={styles.cardLabel}>Name</span><span>{row.name}</span></div>
-              <div style={styles.cardRow}>
-                <span style={styles.cardLabel}>Account</span>
-                <span>
-                  {formatINR(
-                    (row.savedAmount !== undefined || row.SavedAmount !== undefined)
-                      ? Math.max(Number(row.accountBalance || 0), Number(row.savedAmount ?? row.SavedAmount ?? 0))
-                      : Number(row.accountBalance ?? row.amount ?? 0)
-                  )}
-                </span>
-              </div>
+              <div style={styles.cardRow}><span style={styles.cardLabel}>Account</span><span>{formatINR(row.accountBalance ?? row.amount ?? 0)}</span></div>
               <div style={styles.cardRow}>
                 <span style={styles.cardLabel}>Saved Weight</span>
-                <span>
-                  {formatSavedWeightForDisplay(
-                    (row.savedAmount !== undefined || row.SavedAmount !== undefined)
-                      ? Math.max(Number(row.accountBalance || 0), Number(row.savedAmount ?? row.SavedAmount ?? 0))
-                      : Number(row.accountBalance ?? row.amount ?? 0),
-                    rates,
-                    row
-                  )}
-                </span>
+                <span>{formatSavedWeightForDisplay(row.accountBalance ?? row.amount ?? 0, rates, row)}</span>
               </div>
-              <div style={styles.cardRow}><span style={styles.cardLabel}>Plan</span><span>{row.plan}</span></div>
+              <div style={styles.cardRow}>
+                <span style={styles.cardLabel}>Plan</span>
+                <button
+                  type="button"
+                  onClick={() => handlePaymentHistory(row, row.plan)}
+                  title={`Click to view ${row.plan} plan payment history`}
+                  style={{
+                    background: '#fce7f0',
+                    color: MAROON,
+                    border: '1px solid #fbcfe8',
+                    borderRadius: '999px',
+                    padding: '2px 8px',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {row.plan}
+                </button>
+              </div>
               <div style={styles.cardRow}><span style={styles.cardLabel}>Mobile</span><span>{row.mobile}</span></div>
               <div style={styles.cardActionWrap}>
                 <button

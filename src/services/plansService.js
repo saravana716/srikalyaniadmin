@@ -55,24 +55,38 @@ function mapSnapshot(snapshot) {
  * Subscribe to plans (real-time). Fetches from server first to avoid stale empty cache.
  */
 export function subscribePlans(setData, onError) {
+  if (typeof setData !== 'function') return () => {};
+
   getDocsFromServer(collection(db, COLLECTION))
     .then((snap) => setData(mapSnapshot(snap)))
     .catch((err) => {
-      console.error('plans initial fetch error', err);
+      console.warn('plans initial fetch error:', err);
       onError?.(err);
     });
 
-  return onSnapshot(
-    collection(db, COLLECTION),
-    (snapshot) => {
-      setData(mapSnapshot(snapshot));
-    },
-    (err) => {
-      console.error('plans subscribe error', err);
-      onError?.(err);
-      setData([]);
-    }
-  );
+  try {
+    const unsub = onSnapshot(
+      collection(db, COLLECTION),
+      (snapshot) => {
+        setData(mapSnapshot(snapshot));
+      },
+      (err) => {
+        console.warn('plans subscribe error:', err);
+        onError?.(err);
+      }
+    );
+
+    return () => {
+      try {
+        if (typeof unsub === 'function') unsub();
+      } catch (e) {
+        console.warn('subscribePlans unsub error ignored:', e);
+      }
+    };
+  } catch (err) {
+    console.warn('subscribePlans failed:', err);
+    return () => {};
+  }
 }
 
 export async function addPlan(data) {

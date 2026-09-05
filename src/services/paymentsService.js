@@ -4,6 +4,9 @@ import {
   addDoc,
   updateDoc,
   deleteDoc,
+  getDoc,
+  getDocs,
+  where,
   onSnapshot,
   query,
   orderBy,
@@ -37,6 +40,9 @@ function mapPaymentRow(d) {
     customerName: d.customerName || '',
     cusId: d.cusId || d.customerId || '',
     chitPlan: d.chitPlan || d.planName || '',
+    planName: d.chitPlan || d.planName || '',
+    planId: d.planId || d.planPurchaseId || d.raw?.planId || d.raw?.planPurchaseId || '',
+    planPurchaseId: d.planPurchaseId || d.planId || d.raw?.planPurchaseId || d.raw?.planId || '',
     dueAmount: d.dueAmount ?? '',
     paidAmount: d.paidAmount ?? d.amount ?? '',
     dueDate: d.dueDate || '',
@@ -69,6 +75,9 @@ function mapInstallmentRow(d) {
     customerName: d.customerName || '',
     cusId: d.cusId || d.customerId || '',
     chitPlan: d.planName || d.chitPlan || '',
+    planName: d.planName || d.chitPlan || '',
+    planId: d.planId || d.planPurchaseId || d.raw?.planId || d.raw?.planPurchaseId || '',
+    planPurchaseId: d.planPurchaseId || d.planId || d.raw?.planPurchaseId || d.raw?.planId || '',
     dueAmount: d.dueAmount ?? amount,
     paidAmount: amount,
     dueDate: d.dueDate || paid,
@@ -95,6 +104,9 @@ function mapLedgerRow(entry) {
     customerName: entry.customerName || '',
     cusId: entry.cusId || entry.customerId || '',
     chitPlan: entry.planName || '',
+    planName: entry.planName || '',
+    planId: entry.planId || entry.planPurchaseId || '',
+    planPurchaseId: entry.planPurchaseId || entry.planId || '',
     dueAmount: amount,
     paidAmount: amount,
     dueDate: paid,
@@ -113,17 +125,42 @@ function mapLedgerRow(entry) {
 }
 
 function subscribeCollection(colName, setRows) {
-  const plain = collection(db, colName);
-  const apply = (snapshot) => {
-    setRows(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
-  };
-  const ordered = query(plain, orderBy('createdAt', 'desc'));
-  let unsub = onSnapshot(ordered, apply, () => {
-    unsub = onSnapshot(plain, apply, () => setRows([]));
-  });
-  return () => {
-    if (typeof unsub === 'function') unsub();
-  };
+  if (typeof setRows !== 'function') return () => {};
+  try {
+    const plain = collection(db, colName);
+    const apply = (snapshot) => {
+      const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+      list.sort((a, b) => {
+        const ta = a.createdAt?.toMillis?.() || Date.parse(a.createdAt || a.paidDate || 0) || 0;
+        const tb = b.createdAt?.toMillis?.() || Date.parse(b.createdAt || b.paidDate || 0) || 0;
+        return tb - ta;
+      });
+      setRows(list);
+    };
+
+    const unsub = onSnapshot(
+      plain,
+      apply,
+      (err) => {
+        console.warn(`onSnapshot failed for ${colName}, falling back to getDocs:`, err);
+        getDocs(plain)
+          .then(apply)
+          .catch(() => setRows([]));
+      }
+    );
+
+    return () => {
+      try {
+        if (typeof unsub === 'function') unsub();
+      } catch (e) {
+        console.warn(`Unsubscribe caught error for ${colName}:`, e);
+      }
+    };
+  } catch (err) {
+    console.warn(`subscribeCollection failed for ${colName}:`, err);
+    setRows([]);
+    return () => {};
+  }
 }
 
 /**
@@ -177,16 +214,142 @@ export function subscribeAllPayments(setData) {
   });
 
   return () => {
-    unsubPayments();
-    unsubInstallments();
-    unsubLedger();
+    try { if (typeof unsubPayments === 'function') unsubPayments(); } catch (e) {}
+    try { if (typeof unsubInstallments === 'function') unsubInstallments(); } catch (e) {}
+    try { if (typeof unsubLedger === 'function') unsubLedger(); } catch (e) {}
   };
 }
 
 /**
- * Add a payment (e.g. from mobile or web).
+ * Record a Chit Fund / Gold Scheme payment or installment with full synchronization:
+ * 1. Inserts record into 'installments' collection with cusId, planId, amount, mode, status.
+ * 2. If status is Completed, credits the linked planPurchase in 'planPurchases' (savedAmount, paidInstallments, savedWeight).
+ * 3. Credits the customer's account in 'customers' (accountBalance).
+ * 4. Logs to 'customerLedger'.
+ */
+export async function recordChitPayment(data) {
+  const amount = Number(data.paidAmount ?? data.amount) || 0;
+  if (amount <= 0) throw new Error('Payment amount must be greater than 0');
+
+  const mode = data.mode || data.paymentMode || 'Cash';
+  const status = data.status === 'Pending' ? 'Pending' : 'Completed';
+  const paidDate = data.paidDate || data.dueDate || new Date().toISOString().slice(0, 10);
+  const installmentNo = data.installmentNo || `INST-${Date.now().toString().slice(-6)}`;
+  const cusId = String(data.cusId || '').trim();
+  const customerId = String(data.customerId || '').trim();
+  const customerName = String(data.customerName || '').trim();
+  const planId = String(data.planId || data.planPurchaseId || '').trim();
+  const planName = String(data.planName || data.chitPlan || '').trim();
+  const note = String(data.note || '').trim();
+
+  // 1. Create installment record in installments collection
+  const instRef = await addDoc(collection(db, INSTALLMENTS), {
+    installmentNo,
+    dueDate: data.dueDate || paidDate,
+    paidDate,
+    amount: String(amount),
+    mode,
+    status: status === 'Completed' ? 'Paid' : 'Pending',
+    customerId,
+    cusId,
+    customerName,
+    planId,
+    planName,
+    note,
+    source: data.source || 'chit_installment',
+    createdAt: serverTimestamp(),
+  });
+
+  // 2. If completed, sync to Plan Purchase, Customer account, and Ledger
+  if (status === 'Completed') {
+    let updatedPlan = null;
+    // Sync to plan purchase if linked
+    if (planId) {
+      try {
+        const { creditPlanPurchaseAmount } = await import('./planPurchasesService');
+        updatedPlan = await creditPlanPurchaseAmount(planId, amount, mode, {
+          quality: data.quality,
+          ratePerGram: data.ratePerGram,
+        });
+      } catch (err) {
+        console.warn('Could not sync to plan purchase', err);
+      }
+    }
+
+    // Sync to customer account if customerId or cusId exists
+    if (customerId || cusId) {
+      try {
+        let custRef = customerId ? doc(db, 'customers', customerId) : null;
+        let custSnap = custRef ? await getDoc(custRef) : null;
+
+        // If not found by direct doc ID, look up by cusId
+        if (!custSnap || !custSnap.exists()) {
+          const searchCusId = cusId || customerId;
+          if (searchCusId) {
+            const qCust = query(collection(db, 'customers'), where('cusId', '==', searchCusId));
+            const snapCus = await getDocs(qCust);
+            if (!snapCus.empty) {
+              custRef = snapCus.docs[0].ref;
+              custSnap = snapCus.docs[0];
+            }
+          }
+        }
+
+        if (custSnap && custSnap.exists()) {
+          const custData = custSnap.data();
+          const currentBal = Number(custData.accountBalance ?? custData.amount ?? 0) || 0;
+          const nextBal = currentBal + amount;
+          const prevCustWeight = Number(custData.savedWeight ?? custData.goldWeight ?? 0) || 0;
+          const nextCustWeight = Number((prevCustWeight + (updatedPlan?.addedWeight || 0)).toFixed(4));
+          await updateDoc(custRef, {
+            accountBalance: nextBal,
+            amount: nextBal,
+            savedWeight: nextCustWeight,
+            goldWeight: nextCustWeight,
+            lastCreditAt: serverTimestamp(),
+            lastPaymentMode: mode,
+            updatedAt: serverTimestamp(),
+          });
+        }
+      } catch (err) {
+        console.warn('Could not sync to customer balance', err);
+      }
+    }
+
+    // Add to customer ledger with gold weight metrics
+    try {
+      await addDoc(collection(db, LEDGER), {
+        customerId,
+        cusId,
+        customerName,
+        mobile: data.mobile || '',
+        type: 'credit',
+        amount,
+        weight: updatedPlan?.addedWeight || 0,
+        savedWeightAfter: updatedPlan?.savedWeight || null,
+        ratePerGram: updatedPlan?.ratePerGram || null,
+        quality: updatedPlan?.quality || '',
+        paymentMode: mode,
+        note,
+        planPurchaseId: planId,
+        planName,
+        createdAt: serverTimestamp(),
+      });
+    } catch (err) {
+      console.warn('Could not sync to customer ledger', err);
+    }
+  }
+
+  return { id: instRef.id };
+}
+
+/**
+ * Add a payment (unified helper for chit payments & manual entries).
  */
 export async function addPayment(data) {
+  if (data.customerId || data.cusId || data.planId) {
+    return recordChitPayment(data);
+  }
   const ref = await addDoc(collection(db, COLLECTION), {
     customerName: data.customerName,
     chitPlan: data.chitPlan,

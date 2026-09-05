@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { resolveImageSrcAsync } from '../utils/imageUtils';
 import { subscribePlanPaymentHistory } from '../services/customersService';
 import { formatINR } from '../utils/currencyUtils';
-import { formatToIST } from '../utils/dateUtils';
+import { formatToIST, formatPaidDate } from '../utils/dateUtils';
 import { useLatestMetalRates } from '../hooks/useLatestMetalRates';
 import { parseMoneyAmount, savedWeightMeta } from '../utils/weightUtils';
 
@@ -10,9 +10,7 @@ const MAROON = '#801A39';
 const BORDER_GRAY = '#e0e0e0';
 
 function formatLedgerTime(value) {
-  if (!value) return '—';
-  if (typeof value?.toDate === 'function') return formatToIST(value.toDate().toISOString());
-  return formatToIST(value);
+  return formatPaidDate(value);
 }
 
 const DocumentImage = ({ rawValue, label, onOpen }) => {
@@ -95,9 +93,10 @@ const DocumentImage = ({ rawValue, label, onOpen }) => {
 
 function DetailItem({ label, value, isStatus }) {
   const display = value != null && value !== '' ? value : 'N/A';
-  const statusStyle = display === 'Active'
+  const statusLower = String(display).toLowerCase();
+  const statusStyle = statusLower === 'active'
     ? styles.badgeActive
-    : display === 'Cancelled'
+    : ['cancelled', 'closed'].includes(statusLower)
       ? styles.badgeCancelled
       : styles.badgeInactive;
   return (
@@ -123,7 +122,13 @@ function pickRawImage(row, side) {
   return null;
 }
 
-export const PlanPurchaseDetailModal = ({ row, onClose, onCancelChit }) => {
+export const PlanPurchaseDetailModal = ({
+  row,
+  onClose,
+  onCloseAccount,
+  onCancelChit,
+  onOpenPaymentHistory,
+}) => {
   const [paymentHistory, setPaymentHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const { rates } = useLatestMetalRates();
@@ -153,8 +158,11 @@ export const PlanPurchaseDetailModal = ({ row, onClose, onCancelChit }) => {
 
   const frontRaw = pickRawImage(row, 'front');
   const backRaw = pickRawImage(row, 'back');
-  const isCancelled = String(row.status || '').toLowerCase() === 'cancelled';
   const savedRupees = parseMoneyAmount(row.savedAmount ?? row.amount);
+  const statusLower = String(row.status || '').toLowerCase();
+  const isCancelled = statusLower === 'cancelled' || Boolean(row.signedCancelFormUrl) || (row.penaltyAmount != null && Number(row.penaltyAmount) > 0);
+  const isClosed = statusLower === 'closed' || Boolean(row.closeDetails);
+  const isClosedOrCancelled = isCancelled || isClosed;
   const weightInfo = savedWeightMeta(savedRupees, rates, row);
 
   return (
@@ -186,7 +194,7 @@ export const PlanPurchaseDetailModal = ({ row, onClose, onCancelChit }) => {
             <div style={styles.detailGrid}>
               <DetailItem label="Plan Name" value={row.name || row.planName} />
               <DetailItem label="Plan Type" value={row.plan || row.type} />
-              <DetailItem label="Joined Date" value={row.joinedDate || row.startDate} />
+              <DetailItem label="Joined Date" value={formatPaidDate(row.joinedDate || row.startDate, { dateOnly: true })} />
               <DetailItem label="Status" value={row.status} isStatus />
               <DetailItem label="Amount" value={row.amount != null ? `₹${row.amount}` : null} />
               <DetailItem
@@ -206,7 +214,26 @@ export const PlanPurchaseDetailModal = ({ row, onClose, onCancelChit }) => {
           </div>
 
           <div style={styles.detailSection}>
-            <h3 style={styles.sectionTitle}>Payment History</h3>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+              <h3 style={{ ...styles.sectionTitle, margin: 0 }}>Payment History</h3>
+              {onOpenPaymentHistory && (
+                <button
+                  type="button"
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: MAROON,
+                    fontSize: '13px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    textDecoration: 'underline',
+                  }}
+                  onClick={() => onOpenPaymentHistory(row)}
+                >
+                  Full Payment View →
+                </button>
+              )}
+            </div>
             {historyLoading ? (
               <p style={styles.historyEmpty}>Loading payment history…</p>
             ) : paymentHistory.length === 0 ? (
@@ -216,12 +243,21 @@ export const PlanPurchaseDetailModal = ({ row, onClose, onCancelChit }) => {
                 {paymentHistory.map((entry) => (
                   <div key={entry.id} style={styles.ledgerItem}>
                     <div style={styles.ledgerTop}>
-                      <strong style={{ color: '#16a34a' }}>+ {formatINR(entry.amount)}</strong>
-                      <span style={styles.ledgerMode}>{entry.paymentMode || 'Cash'}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <strong style={{ color: '#16a34a' }}>+ {formatINR(entry.paidAmount ?? entry.amount ?? 0)}</strong>
+                        {entry.sourceLabel && (
+                          <span style={{ fontSize: 11, fontWeight: 600, color: '#4b5563', backgroundColor: '#f3f4f6', padding: '2px 6px', borderRadius: 4 }}>
+                            {entry.sourceLabel}
+                          </span>
+                        )}
+                      </div>
+                      <span style={styles.ledgerMode}>{entry.paymentMode || entry.mode || 'Cash'}</span>
                     </div>
                     <div style={styles.ledgerMeta}>
-                      {formatLedgerTime(entry.createdAt)}
-                      {entry.planName ? ` · ${entry.planName}` : ''}
+                      {formatLedgerTime(entry.createdAt || entry.paidDate)}
+                      {entry.planName || entry.chitPlan ? ` · ${entry.planName || entry.chitPlan}` : ''}
+                      {entry.installmentNo ? ` · #${entry.installmentNo}` : ''}
+                      {entry.status ? ` · ${entry.status}` : ''}
                       {entry.planAmountAfter != null ? ` · Plan ${formatINR(entry.planAmountAfter)}` : ''}
                       {entry.balanceAfter != null ? ` · Bal ${formatINR(entry.balanceAfter)}` : ''}
                     </div>
@@ -234,7 +270,7 @@ export const PlanPurchaseDetailModal = ({ row, onClose, onCancelChit }) => {
 
           {isCancelled && (
             <div style={styles.detailSection}>
-              <h3 style={styles.sectionTitle}>Cancellation & Penalty</h3>
+              <h3 style={styles.sectionTitle}>Cancellation &amp; Penalty</h3>
               <div style={styles.detailGrid}>
                 <DetailItem label="Name" value={row.cancelName} />
                 <DetailItem label="Location" value={row.cancelLocation} />
@@ -242,6 +278,7 @@ export const PlanPurchaseDetailModal = ({ row, onClose, onCancelChit }) => {
                 <DetailItem label="Reason" value={row.cancelReason} />
                 <DetailItem label="Months Paid" value={row.monthsPaid} />
                 <DetailItem label="Penalty Amount" value={row.penaltyAmount != null ? `₹${row.penaltyAmount}` : null} />
+                <DetailItem label="Cancelled Date (IST)" value={formatLedgerTime(row.cancelledAt)} />
               </div>
               <div style={styles.proofImagesGrid}>
                 {row.signedCancelFormUrl ? (
@@ -281,6 +318,20 @@ export const PlanPurchaseDetailModal = ({ row, onClose, onCancelChit }) => {
             </div>
           )}
 
+          {isClosed && (
+            <div style={styles.detailSection}>
+              <h3 style={styles.sectionTitle}>Account Closure Details</h3>
+              <div style={styles.detailGrid}>
+                <DetailItem label="Closed By / Name" value={row.closeName || row.name || row.customerName} />
+                <DetailItem label="Location / Branch" value={row.closeLocation || row.city || row.location} />
+                <DetailItem label="Address" value={row.closeAddress || row.address} />
+                <DetailItem label="Closure Details" value={row.closeDetails} />
+                <DetailItem label="Months Paid" value={row.monthsPaid} />
+                <DetailItem label="Closed Date (IST)" value={formatLedgerTime(row.closedAt)} />
+              </div>
+            </div>
+          )}
+
           <div style={styles.detailSection}>
             <h3 style={styles.sectionTitle}>Bank & Nominee Details</h3>
             <div style={styles.detailGrid}>
@@ -306,11 +357,26 @@ export const PlanPurchaseDetailModal = ({ row, onClose, onCancelChit }) => {
             </div>
           </div>
 
-          {!isCancelled && onCancelChit && (
+          {!isClosedOrCancelled && (
             <div style={styles.footerActions}>
-              <button type="button" style={styles.cancelChitBtn} onClick={onCancelChit}>
-                Cancel Chit (Penalty Form)
-              </button>
+              {onCloseAccount && (
+                <button
+                  type="button"
+                  style={styles.closeAccountBtn}
+                  onClick={onCloseAccount}
+                >
+                  Close Account
+                </button>
+              )}
+              {onCancelChit && (
+                <button
+                  type="button"
+                  style={styles.cancelChitBtn}
+                  onClick={onCancelChit}
+                >
+                  Cancel Chit (Penalty Form)
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -344,8 +410,9 @@ const styles = {
   proofImage: { width: '100%', maxHeight: '360px', minHeight: '180px', objectFit: 'contain', backgroundColor: '#f3f4f6', borderRadius: '8px', border: `1px solid ${BORDER_GRAY}`, cursor: 'pointer' },
   sigImage: { width: '100%', maxHeight: '140px', objectFit: 'contain', backgroundColor: '#fafafa', borderRadius: '8px', border: `1px solid ${BORDER_GRAY}` },
   imagePlaceholder: { width: '100%', minHeight: '180px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f9fafb', borderRadius: '8px', border: `1px dashed ${BORDER_GRAY}`, color: '#6b7280', fontSize: '14px', padding: '16px', textAlign: 'center' },
-  footerActions: { display: 'flex', justifyContent: 'flex-end', marginTop: '8px' },
-  cancelChitBtn: { padding: '10px 18px', borderRadius: '8px', border: 'none', backgroundColor: '#b45309', color: '#fff', fontWeight: '600', cursor: 'pointer', fontSize: '14px' },
+  footerActions: { display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '16px', flexWrap: 'wrap' },
+  closeAccountBtn: { padding: '10px 18px', borderRadius: '8px', border: '1px solid #b45309', backgroundColor: '#fff', color: '#b45309', fontWeight: '600', cursor: 'pointer', fontSize: '14px' },
+  cancelChitBtn: { padding: '10px 18px', borderRadius: '8px', border: 'none', backgroundColor: '#dc2626', color: '#fff', fontWeight: '600', cursor: 'pointer', fontSize: '14px' },
   historyEmpty: { color: '#6b7280', fontSize: '14px', margin: 0 },
   ledgerList: { display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '280px', overflowY: 'auto' },
   ledgerItem: { padding: '10px 12px', borderRadius: '8px', border: `1px solid ${BORDER_GRAY}`, backgroundColor: '#fafafa' },

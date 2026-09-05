@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Sidebar from '../components/Sidebar';
 import { FiSettings, FiBell, FiMenu } from 'react-icons/fi';
 import StatsCard from '../components/StatsCard';
@@ -8,7 +8,7 @@ import PaymentTable from '../components/PaymentTable';
 import { useAuth } from '../context/AuthContext';
 import { subscribeCustomers } from '../services/customersService';
 import { subscribePlans } from '../services/plansService';
-import { subscribePayments } from '../services/paymentsService';
+import { subscribeAllPayments } from '../services/paymentsService';
 import { subscribePlanPurchases } from '../services/planPurchasesService';
 import { subscribeNotifications } from '../services/notificationsService';
 import { parseAmount, formatINR } from '../utils/currencyUtils';
@@ -21,38 +21,118 @@ const Dashboard = () => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [customers, setCustomers] = useState([]);
     const [plans, setPlans] = useState([]);
-    const [payments, setPayments] = useState([]);
+    const [allPayments, setAllPayments] = useState([]);
     const [planPurchases, setPlanPurchases] = useState([]);
     const [notifications, setNotifications] = useState([]);
 
     useEffect(() => {
+        let isMounted = true;
         const unsubs = [
-            subscribeCustomers(setCustomers),
-            subscribePlans(setPlans),
-            subscribePayments(setPayments),
-            subscribePlanPurchases(setPlanPurchases),
-            subscribeNotifications(setNotifications),
+            subscribeCustomers((data) => { if (isMounted) setCustomers(data); }),
+            subscribePlans((data) => { if (isMounted) setPlans(data); }),
+            subscribeAllPayments((data) => { if (isMounted) setAllPayments(data); }),
+            subscribePlanPurchases((data) => { if (isMounted) setPlanPurchases(data); }),
+            subscribeNotifications((data) => { if (isMounted) setNotifications(data); }),
         ];
-        return () => unsubs.forEach((fn) => fn());
+        return () => {
+            isMounted = false;
+            unsubs.forEach((fn) => {
+                try { if (typeof fn === 'function') fn(); } catch (e) {}
+            });
+        };
     }, []);
 
-    const activeChits = planPurchases.filter((p) => p.status === 'Active').length;
-    const activePlans = plans.filter((p) => p.status === 'Active').length;
+    // Merge planPurchases with scheme enrollments from customers for accurate active chit metrics
+    const effectivePlanPurchases = useMemo(() => {
+        const map = new Map();
+        (planPurchases || []).forEach((r) => {
+            if (r.id) map.set(r.id, r);
+        });
+
+        (customers || []).forEach((c) => {
+            if (c.type === 'scheme_enrollment' || c.planName || c.plan) {
+                const pName = c.planName || (c.plan ? `${c.plan} Gold Plan` : '');
+                if (!pName) return;
+                const alreadyHas = Array.from(map.values()).some((existing) => {
+                    const eCus = String(existing.cusId || existing.customerId || '').trim().toLowerCase();
+                    const eName = String(existing.planName || existing.name || '').trim().toLowerCase();
+                    const thisCus = String(c.cusId || c.id || '').trim().toLowerCase();
+                    return (eCus === thisCus && eName === pName.trim().toLowerCase()) || existing.id === c.id;
+                });
+                if (!alreadyHas) {
+                    map.set(c.id, {
+                        id: c.id,
+                        cusId: c.cusId || c.id,
+                        customerId: c.id,
+                        name: c.name,
+                        customerName: c.name,
+                        planName: pName,
+                        amount: c.amount || 0,
+                        savedAmount: c.accountBalance ?? c.savedAmount ?? c.amount ?? 0,
+                        status: c.status || 'Active',
+                    });
+                }
+            }
+        });
+
+        return Array.from(map.values());
+    }, [planPurchases, customers]);
+
+    const activeChits = useMemo(() => {
+        return effectivePlanPurchases.filter((p) => {
+            const s = String(p.status || 'Active').trim().toLowerCase();
+            return s === 'active';
+        }).length;
+    }, [effectivePlanPurchases]);
+
     const now = new Date();
-    const month = now.getMonth();
-    const year = now.getFullYear();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
 
-    const monthlyCollection = payments
-        .filter((p) => {
-            if (p.status !== 'Paid') return false;
-            const d = p.dueDate ? new Date(p.dueDate.includes('T') ? p.dueDate : p.dueDate.replace(' ', 'T') + 'Z') : null;
-            return d && !Number.isNaN(d.getTime()) && d.getMonth() === month && d.getFullYear() === year;
-        })
-        .reduce((sum, p) => sum + parseAmount(p.paidAmount), 0);
+    // Calculate current month dynamic collection from all payments
+    const monthlyCollection = useMemo(() => {
+        return (allPayments || []).reduce((sum, p) => {
+            const status = String(p.status || 'Paid').toLowerCase();
+            if (status === 'failed' || status === 'cancelled') return sum;
 
-    const pendingAmount = payments
-        .filter((p) => p.status === 'Pending')
-        .reduce((sum, p) => sum + Math.max(0, parseAmount(p.dueAmount) - parseAmount(p.paidAmount)), 0);
+            const amt = Number(p.paidAmount ?? p.amount ?? p.dueAmount ?? 0) || 0;
+            if (amt <= 0) return sum;
+
+            const rawTs = p.paidDate || p.createdAt || p.date || p.dueDate;
+            if (!rawTs) return sum;
+
+            let d = null;
+            if (typeof rawTs?.toDate === 'function') {
+                d = rawTs.toDate();
+            } else if (typeof rawTs === 'object' && rawTs.seconds) {
+                d = new Date(rawTs.seconds * 1000);
+            } else {
+                const str = String(rawTs);
+                d = new Date(str.includes('T') ? str : str.replace(' ', 'T'));
+            }
+
+            if (d && !Number.isNaN(d.getTime())) {
+                if (d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
+                    return sum + amt;
+                }
+            }
+            return sum;
+        }, 0);
+    }, [allPayments, currentMonth, currentYear]);
+
+    // Calculate dynamic pending amount across active plan purchases
+    const pendingAmount = useMemo(() => {
+        return effectivePlanPurchases.reduce((sum, p) => {
+            const s = String(p.status || 'Active').trim().toLowerCase();
+            if (s !== 'active') return sum;
+            const targetDuration = Number(p.durationMonths) || 11;
+            const monthlyAmt = Number(p.amount) || 0;
+            const targetTotal = targetDuration * monthlyAmt;
+            const saved = Number(p.savedAmount ?? p.amount ?? 0) || 0;
+            const remaining = Math.max(0, targetTotal - saved);
+            return sum + remaining;
+        }, 0);
+    }, [effectivePlanPurchases]);
 
     const unreadNotifs = notifications.length;
     const avatarName = encodeURIComponent(user?.name || user?.email || 'Admin');
@@ -93,19 +173,19 @@ const Dashboard = () => {
 
                 <div style={styles.content} className="dashboard-content">
                     <div style={styles.statsRow} className="stats-row">
-                        <StatsCard title="Total Active Chits" value={String(activeChits || activePlans)} />
+                        <StatsCard title="Total Active Chits" value={String(activeChits)} />
                         <StatsCard title="Total Customers" value={String(customers.length)} />
                         <StatsCard title="Monthly Collection" value={formatINR(monthlyCollection)} />
                         <StatsCard title="Pending Amount" value={formatINR(pendingAmount)} />
                     </div>
 
                     <div style={styles.chartsRow} className="charts-row">
-                        <RevenueChart />
-                        <AnalyticsChart />
+                        <RevenueChart payments={allPayments} />
+                        <AnalyticsChart planPurchases={effectivePlanPurchases} />
                     </div>
 
                     <div style={styles.tableRow} className="table-row">
-                        <PaymentTable />
+                        <PaymentTable payments={allPayments} />
                     </div>
                 </div>
             </main>

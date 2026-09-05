@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf';
 import logoUrl from '../assets/sri-kalyani-logo.png';
+import { formatPaidDate } from './dateUtils';
 
 const MAROON = [128, 26, 57];
 const GOLD = [184, 148, 58];
@@ -133,7 +134,7 @@ export async function downloadCancelChitPdf({ planPurchase, form }) {
   doc.text(formNo, pageW - margin, metaY + 5, { align: 'right' });
   doc.setFontSize(8);
   doc.setTextColor(...MUTED);
-  doc.text(now.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }), pageW - margin, metaY + 10, { align: 'right' });
+  doc.text(formatPaidDate(now), pageW - margin, metaY + 10, { align: 'right' });
   doc.text('Official Admin Document', pageW - margin, metaY + 15, { align: 'right' });
 
   y = Math.max(y + logoH + 3, metaY + 18);
@@ -321,8 +322,8 @@ export async function downloadCancelChitPdf({ planPurchase, form }) {
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7);
   doc.setTextColor(...MUTED);
-  doc.text('Sri Kalyani Jewellery  ·  Cancel Chit Penalty Form  ·  For office use only', margin, footerTop + 4.5);
-  doc.text(`Generated ${now.toLocaleString('en-IN')}`, pageW - margin, footerTop + 4.5, { align: 'right' });
+  doc.text('Sri Kalyani Jewellery  ·  Official Closure / Cancellation Document', margin, footerTop + 4.5);
+  doc.text(`Generated ${formatPaidDate(now)}`, pageW - margin, footerTop + 4.5, { align: 'right' });
 
   const safeName = String(customerName)
     .replace(/[^a-zA-Z0-9_-]+/g, '_')

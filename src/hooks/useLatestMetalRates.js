@@ -9,11 +9,19 @@ export function useLatestMetalRates() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
     const unsub = subscribeLatestMetalRates((latest) => {
-      setRates(latest);
-      setLoading(false);
+      if (isMounted) {
+        setRates(latest);
+        setLoading(false);
+      }
     });
-    return () => unsub();
+    return () => {
+      isMounted = false;
+      if (typeof unsub === 'function') {
+        unsub();
+      }
+    };
   }, []);
 
   return { rates, loading };

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Sidebar from '../components/Sidebar';
 import ActionMenu from '../components/ActionMenu';
 import Button from '../components/Button';
-import { FiSettings, FiBell, FiMenu, FiX, FiSearch } from 'react-icons/fi';
+import { FiSettings, FiBell, FiMenu, FiX, FiSearch, FiDollarSign, FiCalendar, FiPieChart, FiDownload, FiPlusCircle, FiCreditCard } from 'react-icons/fi';
 import { MdKeyboardArrowUp, MdKeyboardArrowDown } from 'react-icons/md';
 import {
   subscribeAllPayments,
@@ -11,7 +11,9 @@ import {
   deleteUnifiedPayment,
 } from '../services/paymentsService';
 import { formatINR } from '../utils/currencyUtils';
+import { formatPaidDate } from '../utils/dateUtils';
 import { downloadPaymentReceipt } from '../utils/paymentReceiptPdf';
+import ChitPaymentModal from '../components/ChitPaymentModal';
 
 const MAROON = '#801A39';
 const LIGHT_GRAY = '#F0F0F0';
@@ -123,8 +125,8 @@ const PaymentViewModal = ({ payment, onClose }) => {
     { label: 'Chit Plan:', value: payment.chitPlan || '—' },
     { label: 'Due Amount:', value: displayMoney(payment.dueAmount) },
     { label: 'Paid Amount:', value: displayMoney(payment.paidAmount) },
-    { label: 'Due Date:', value: payment.dueDate || '—' },
-    { label: 'Paid Date:', value: payment.paidDate || '—' },
+    { label: 'Due Date:', value: formatPaidDate(payment.dueDate, { dateOnly: true }) },
+    { label: 'Paid Date:', value: formatPaidDate(payment) },
     { label: 'Mode:', value: payment.mode || '—' },
     { label: 'Status:', value: payment.status || '—' },
     { label: 'Note:', value: payment.note || '—' },
@@ -197,6 +199,8 @@ const Payment = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [sourceFilter, setSourceFilter] = useState('all');
+  const [schemeFilter, setSchemeFilter] = useState('all');
+  const [modeFilter, setModeFilter] = useState('all');
 
   useEffect(() => {
     const unsub = subscribeAllPayments((list) => {
@@ -206,23 +210,88 @@ const Payment = () => {
     return () => unsub();
   }, []);
 
+  const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
+
+  // Compute collection statistics
+  const stats = useMemo(() => {
+    let total = 0;
+    let today = 0;
+    let cash = 0;
+    let digital = 0;
+    payments.forEach((p) => {
+      const amt = Number(String(p.paidAmount ?? p.amount ?? 0).replace(/[^0-9.]/g, '')) || 0;
+      const s = String(p.status || '').toLowerCase();
+      const isCompleted = s === 'completed' || s === 'paid';
+      if (isCompleted) {
+        total += amt;
+        const pDate = String(p.paidDate || p.dueDate || '').slice(0, 10);
+        if (pDate === todayStr) {
+          today += amt;
+        }
+        const m = String(p.mode || '').toLowerCase();
+        if (m.includes('cash')) {
+          cash += amt;
+        } else {
+          digital += amt;
+        }
+      }
+    });
+    return {
+      totalCollections: total,
+      todayCollections: today,
+      totalCount: payments.length,
+      cashAmount: cash,
+      digitalAmount: digital,
+    };
+  }, [payments, todayStr]);
+
+  // Unique schemes found in payments
+  const uniqueSchemes = useMemo(() => {
+    const s = new Set();
+    payments.forEach((p) => {
+      if (p.chitPlan) s.add(p.chitPlan);
+    });
+    return Array.from(s).sort();
+  }, [payments]);
+
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return payments.filter((row) => {
       if (sourceFilter !== 'all' && row.source !== sourceFilter) return false;
+      if (schemeFilter !== 'all') {
+        const cp = String(row.chitPlan || '').toLowerCase();
+        if (!cp.includes(schemeFilter.toLowerCase())) return false;
+      }
+      if (modeFilter !== 'all') {
+        const m = String(row.mode || '').toLowerCase();
+        if (modeFilter === 'cash' && !m.includes('cash')) return false;
+        if (modeFilter === 'upi' && !m.includes('upi')) return false;
+        if (modeFilter === 'card' && !m.includes('card')) return false;
+      }
       if (!q) return true;
-      const hay = [row.customerName, row.cusId, row.chitPlan, row.mode, row.status, row.sourceLabel, row.paidAmount]
+      const hay = [
+        row.customerName,
+        row.cusId,
+        row.chitPlan,
+        row.mode,
+        row.status,
+        row.sourceLabel,
+        row.paidAmount,
+        row.paidDate,
+        row.dueDate,
+        formatPaidDate(row),
+      ]
         .map((x) => String(x || '').toLowerCase())
         .join(' ');
       return hay.includes(q);
     });
-  }, [payments, searchQuery, sourceFilter]);
+  }, [payments, searchQuery, sourceFilter, schemeFilter, modeFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, sourceFilter]);
+  }, [searchQuery, sourceFilter, schemeFilter, modeFilter]);
 
   useEffect(() => {
     if (currentPage > totalPages) setCurrentPage(totalPages);
@@ -308,11 +377,9 @@ const Payment = () => {
       )}
 
       {showAddPaymentModal && (
-        <AddEditPaymentModal
-          onClose={() => { if (!saving) { setShowAddPaymentModal(false); setSaveError(null); } }}
-          onSave={handleSavePayment}
-          error={saveError}
-          saving={saving}
+        <ChitPaymentModal
+          onClose={() => setShowAddPaymentModal(false)}
+          onSuccess={() => setShowAddPaymentModal(false)}
         />
       )}
       {editingPayment && (
@@ -335,10 +402,22 @@ const Payment = () => {
             >
               <FiMenu size={24} color={MAROON} />
             </button>
-            <h1 style={styles.pageTitle}>Payment</h1>
+            <div>
+              <h1 style={styles.pageTitle}>Payment</h1>
+              <p style={{ margin: 0, fontSize: 13, color: '#666' }}>
+                Chit Fund & Gold Savings Collections
+              </p>
+            </div>
           </div>
           <div style={styles.headerActions} className="dashboard-header-actions">
-            <Button type="button" onClick={() => setShowAddPaymentModal(true)}>+ Add Payment</Button>
+            <button
+              type="button"
+              style={styles.payInstallmentBtn}
+              onClick={() => setShowAddPaymentModal(true)}
+            >
+              <FiPlusCircle size={16} />
+              <span>+ Record Installment</span>
+            </button>
             <div style={styles.headerIcons}>
               <button style={styles.iconButton}><FiSettings /></button>
               <button style={styles.iconButton}>
@@ -350,27 +429,92 @@ const Payment = () => {
           </div>
         </header>
 
+        {/* Collection Summary Metric Cards */}
+        <div style={styles.statsGrid}>
+          <div style={styles.statCard}>
+            <div style={styles.statIconWrap}>
+              <FiDollarSign size={22} color={MAROON} />
+            </div>
+            <div>
+              <div style={styles.statLabel}>Total Scheme Collections</div>
+              <div style={styles.statValue}>{formatINR(stats.totalCollections)}</div>
+            </div>
+          </div>
+          <div style={styles.statCard}>
+            <div style={{ ...styles.statIconWrap, backgroundColor: '#dcfce7' }}>
+              <FiCalendar size={22} color="#15803d" />
+            </div>
+            <div>
+              <div style={styles.statLabel}>Today's Collections</div>
+              <div style={{ ...styles.statValue, color: '#15803d' }}>{formatINR(stats.todayCollections)}</div>
+            </div>
+          </div>
+          <div style={styles.statCard}>
+            <div style={{ ...styles.statIconWrap, backgroundColor: '#eff6ff' }}>
+              <FiCreditCard size={22} color="#2563eb" />
+            </div>
+            <div>
+              <div style={styles.statLabel}>Total Transactions</div>
+              <div style={{ ...styles.statValue, color: '#2563eb' }}>{stats.totalCount}</div>
+            </div>
+          </div>
+          <div style={styles.statCard}>
+            <div style={{ ...styles.statIconWrap, backgroundColor: '#fef3c7' }}>
+              <FiPieChart size={22} color="#b45309" />
+            </div>
+            <div>
+              <div style={styles.statLabel}>Payment Modes Split</div>
+              <div style={{ ...styles.statValue, fontSize: '13px', color: '#b45309', fontWeight: 600 }}>
+                Cash: {formatINR(stats.cashAmount)} | Digital: {formatINR(stats.digitalAmount)}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Filters Toolbar */}
         <div style={styles.toolbar}>
           <div style={styles.searchWrap}>
-            <FiSearch style={{ color: '#999' }} />
+            <FiSearch style={{ color: '#999', marginRight: 8 }} />
             <input
               type="search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search name, plan, mode, ID…"
+              placeholder="Search customer, plan, mode, ID…"
               style={styles.searchInput}
             />
           </div>
           <select
+            value={schemeFilter}
+            onChange={(e) => setSchemeFilter(e.target.value)}
+            style={styles.filterSelect}
+            aria-label="Filter by scheme"
+          >
+            <option value="all">All Schemes</option>
+            {uniqueSchemes.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+          <select
+            value={modeFilter}
+            onChange={(e) => setModeFilter(e.target.value)}
+            style={styles.filterSelect}
+            aria-label="Filter by payment mode"
+          >
+            <option value="all">All Modes</option>
+            <option value="cash">Cash</option>
+            <option value="upi">UPI / GPay / PhonePe</option>
+            <option value="card">Card</option>
+          </select>
+          <select
             value={sourceFilter}
             onChange={(e) => setSourceFilter(e.target.value)}
-            style={styles.sourceSelect}
+            style={styles.filterSelect}
             aria-label="Filter by source"
           >
             <option value="all">All Sources</option>
-            <option value="payment">Manual Payments</option>
             <option value="installment">Installments</option>
             <option value="customer_cash">Add Cash</option>
+            <option value="payment">Manual Payments</option>
           </select>
         </div>
 
@@ -384,11 +528,11 @@ const Payment = () => {
             <thead>
               <tr>
                 <th style={styles.th}><span className="th-content">Customer <MdKeyboardArrowUp size={14} /><MdKeyboardArrowDown size={14} /></span></th>
-                <th style={styles.th}><span className="th-content">Plan <MdKeyboardArrowUp size={14} /><MdKeyboardArrowDown size={14} /></span></th>
+                <th style={styles.th}><span className="th-content">Chit Scheme <MdKeyboardArrowUp size={14} /><MdKeyboardArrowDown size={14} /></span></th>
                 <th style={styles.th}><span className="th-content">Source <MdKeyboardArrowUp size={14} /><MdKeyboardArrowDown size={14} /></span></th>
                 <th style={styles.th}><span className="th-content">Paid Amount <MdKeyboardArrowUp size={14} /><MdKeyboardArrowDown size={14} /></span></th>
                 <th style={styles.th}><span className="th-content">Mode <MdKeyboardArrowUp size={14} /><MdKeyboardArrowDown size={14} /></span></th>
-                <th style={styles.th}><span className="th-content">Date <MdKeyboardArrowUp size={14} /><MdKeyboardArrowDown size={14} /></span></th>
+                <th style={styles.th}><span className="th-content">Paid Date <MdKeyboardArrowUp size={14} /><MdKeyboardArrowDown size={14} /></span></th>
                 <th style={styles.th}><span className="th-content">Status <MdKeyboardArrowUp size={14} /><MdKeyboardArrowDown size={14} /></span></th>
                 <th style={styles.th}>Action</th>
               </tr>
@@ -397,16 +541,28 @@ const Payment = () => {
               {(loading ? [] : pageRows).map((row) => (
                 <tr key={rowKey(row)} style={styles.tr}>
                   <td style={styles.td}>
-                    <div>{row.customerName || '—'}</div>
-                    {row.cusId ? <div style={styles.subText}>{row.cusId}</div> : null}
+                    <div style={{ fontWeight: 600 }}>{row.customerName || '—'}</div>
+                    {row.cusId ? (
+                      <span style={{ fontSize: 11, color: MAROON, fontWeight: 600, backgroundColor: '#fdf2f4', padding: '1px 6px', borderRadius: 4, display: 'inline-block', marginTop: 2 }}>
+                        {row.cusId}
+                      </span>
+                    ) : null}
                   </td>
-                  <td style={styles.td}>{row.chitPlan || '—'}</td>
+                  <td style={styles.td}>
+                    <strong>{row.chitPlan || '—'}</strong>
+                  </td>
                   <td style={styles.td}>
                     <span style={styles.sourcePill}>{row.sourceLabel}</span>
                   </td>
-                  <td style={styles.td}>{displayMoney(row.paidAmount)}</td>
-                  <td style={styles.td}>{row.mode || '—'}</td>
-                  <td style={styles.td}>{row.paidDate || row.dueDate || '—'}</td>
+                  <td style={styles.td}>
+                    <span style={{ fontWeight: 700, color: '#15803d' }}>
+                      {displayMoney(row.paidAmount)}
+                    </span>
+                  </td>
+                  <td style={styles.td}>
+                    <span style={styles.modeBadge}>{row.mode || '—'}</span>
+                  </td>
+                  <td style={styles.td}>{formatPaidDate(row)}</td>
                   <td style={styles.td}>
                     <span style={statusStyle(row.status, styles)}>
                       {row.status === 'Paid' ? 'Completed' : row.status}
@@ -414,8 +570,17 @@ const Payment = () => {
                   </td>
                   <td style={styles.tdAction}>
                     <div style={styles.actionCellWrap}>
+                      <button
+                        type="button"
+                        style={styles.receiptBtn}
+                        onClick={() => downloadPaymentReceipt(row)}
+                        title="Download Receipt PDF"
+                      >
+                        <FiDownload size={12} style={{ marginRight: 4 }} />
+                        Receipt
+                      </button>
                       <button type="button" style={styles.actionTrigger} onClick={() => handleView(row)}>
-                        View More
+                        View
                       </button>
                       <button
                         type="button"
@@ -436,8 +601,8 @@ const Payment = () => {
               ))}
               {!loading && pageRows.length === 0 && (
                 <tr>
-                  <td style={{ ...styles.td, textAlign: 'center', padding: 24 }} colSpan={8}>
-                    No payments found.
+                  <td style={{ ...styles.td, textAlign: 'center', padding: 32, color: '#666' }} colSpan={8}>
+                    No payments found matching criteria.
                   </td>
                 </tr>
               )}
@@ -475,10 +640,20 @@ const Payment = () => {
               <div style={styles.cardRow}><span style={styles.cardLabel}>Source</span><span style={styles.sourcePill}>{row.sourceLabel}</span></div>
               <div style={styles.cardRow}><span style={styles.cardLabel}>Paid</span><span>{displayMoney(row.paidAmount)}</span></div>
               <div style={styles.cardRow}><span style={styles.cardLabel}>Mode</span><span>{row.mode || '—'}</span></div>
+              <div style={styles.cardRow}><span style={styles.cardLabel}>Paid Date</span><span>{formatPaidDate(row)}</span></div>
               <div style={styles.cardRow}><span style={styles.cardLabel}>Status</span>
                 <span style={statusStyle(row.status, styles)}>{row.status === 'Paid' ? 'Completed' : row.status}</span>
               </div>
               <div style={styles.cardActions}>
+                <button
+                  type="button"
+                  style={styles.receiptBtn}
+                  onClick={() => downloadPaymentReceipt(row)}
+                  title="Download Receipt PDF"
+                >
+                  <FiDownload size={12} style={{ marginRight: 4 }} />
+                  Receipt
+                </button>
                 <button type="button" style={styles.actionTrigger} onClick={() => handleView(row)}>View More</button>
                 <button
                   type="button"
@@ -514,17 +689,69 @@ const styles = {
   main: { marginLeft: '260px', flex: 1, padding: '24px 40px', backgroundColor: '#fff', maxWidth: '100vw', transition: 'margin-left 0.3s ease' },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', gap: '20px', flexWrap: 'wrap' },
   headerRow: { display: 'flex', alignItems: 'center', gap: '10px' },
-  pageTitle: { fontSize: '28px', color: '#1f2937', fontWeight: '700' },
+  pageTitle: { fontSize: '28px', color: MAROON, fontWeight: '700' },
   headerActions: { display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' },
+  payInstallmentBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '10px 18px',
+    borderRadius: '8px',
+    border: 'none',
+    backgroundColor: '#15803d',
+    color: '#fff',
+    fontSize: '14px',
+    fontWeight: '600',
+    cursor: 'pointer',
+    transition: 'background-color 0.2s',
+  },
+  statsGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+    gap: '16px',
+    marginBottom: '24px',
+  },
+  statCard: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '14px',
+    padding: '16px 20px',
+    borderRadius: '12px',
+    backgroundColor: '#fff',
+    border: `1px solid ${BORDER_GRAY}`,
+    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.04)',
+  },
+  statIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: '10px',
+    backgroundColor: '#fbebf0',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  statLabel: {
+    fontSize: '12px',
+    color: '#6b7280',
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  statValue: {
+    fontSize: '18px',
+    fontWeight: '700',
+    color: MAROON,
+  },
   headerIcons: { display: 'flex', alignItems: 'center', gap: '12px' },
   iconButton: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '20px', color: '#666', position: 'relative' },
   notifBadge: { position: 'absolute', top: '-4px', right: '-4px', backgroundColor: MAROON, color: '#fff', fontSize: '10px', width: '16px', height: '16px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' },
   avatar: { width: '36px', height: '36px', borderRadius: '50%' },
   hamburger: { display: 'none', background: 'none', border: 'none', cursor: 'pointer', padding: 4 },
   toolbar: { display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 12, alignItems: 'center' },
-  searchWrap: { display: 'flex', alignItems: 'center', gap: 8, backgroundColor: LIGHT_GRAY, borderRadius: 8, padding: '8px 14px', minWidth: 240, flex: '1 1 240px', maxWidth: 420 },
+  searchWrap: { display: 'flex', alignItems: 'center', gap: 8, backgroundColor: LIGHT_GRAY, borderRadius: 8, padding: '8px 14px', minWidth: 240, flex: '1 1 240px', maxWidth: 380 },
   searchInput: { border: 'none', background: 'transparent', outline: 'none', fontSize: 14, width: '100%', color: '#333' },
-  sourceSelect: { padding: '10px 14px', borderRadius: 8, border: `1px solid ${BORDER_GRAY}`, fontSize: 14, backgroundColor: '#fff', color: '#333', cursor: 'pointer' },
+  filterSelect: { padding: '9px 14px', borderRadius: 8, border: `1px solid ${BORDER_GRAY}`, fontSize: 13, backgroundColor: '#fff', color: '#374151', cursor: 'pointer' },
+  sourceSelect: { padding: '9px 14px', borderRadius: 8, border: `1px solid ${BORDER_GRAY}`, fontSize: 13, backgroundColor: '#fff', color: '#374151', cursor: 'pointer' },
   resultMeta: { margin: '0 0 12px', fontSize: 13, color: '#6b7280' },
   tableWrap: { overflowX: 'auto', marginBottom: 20, border: `1px solid ${BORDER_GRAY}`, borderRadius: 8 },
   table: { width: '100%', borderCollapse: 'collapse', minWidth: 920 },
@@ -534,6 +761,28 @@ const styles = {
   subText: { fontSize: 12, color: '#6b7280', marginTop: 2 },
   tdAction: { padding: '14px 16px' },
   actionCellWrap: { display: 'flex', alignItems: 'center', gap: 8 },
+  receiptBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    padding: '4px 10px',
+    borderRadius: '6px',
+    border: `1px solid ${BORDER_GRAY}`,
+    backgroundColor: '#fff',
+    color: '#374151',
+    fontSize: '12px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    transition: 'all 0.15s',
+  },
+  modeBadge: {
+    display: 'inline-block',
+    padding: '2px 8px',
+    borderRadius: '4px',
+    backgroundColor: '#f3f4f6',
+    color: '#374151',
+    fontSize: '12px',
+    fontWeight: 500,
+  },
   actionTrigger: { color: MAROON, fontWeight: 500, background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 14 },
   actionMenuTrigger: { background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#666', padding: '0 4px' },
   badgeCompleted: { display: 'inline-block', padding: '4px 12px', borderRadius: 9999, backgroundColor: '#16a34a', color: '#fff', fontSize: 13, fontWeight: 500 },

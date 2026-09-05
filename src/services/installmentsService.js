@@ -20,33 +20,43 @@ const LEDGER = 'customerLedger';
  * @returns {() => void} unsubscribe
  */
 export function subscribeInstallments(setData) {
-  const plain = collection(db, COLLECTION);
+  if (typeof setData !== 'function') return () => {};
+  try {
+    const plain = collection(db, COLLECTION);
 
-  const apply = (snapshot) => {
-    const list = snapshot.docs
-      .map((d) => ({ id: d.id, ...d.data() }))
-      .filter((d) => !(d.planId && d.planId.startsWith('APP_')));
-    list.sort((a, b) => {
-      const ta = a.createdAt?.toMillis?.() || Date.parse(a.createdAt || a.paidDate || 0) || 0;
-      const tb = b.createdAt?.toMillis?.() || Date.parse(b.createdAt || b.paidDate || 0) || 0;
-      return tb - ta;
-    });
-    setData(list);
-  };
+    const apply = (snapshot) => {
+      const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+      list.sort((a, b) => {
+        const ta = a.createdAt?.toMillis?.() || Date.parse(a.createdAt || a.paidDate || 0) || 0;
+        const tb = b.createdAt?.toMillis?.() || Date.parse(b.createdAt || b.paidDate || 0) || 0;
+        return tb - ta;
+      });
+      setData(list);
+    };
 
-  const ordered = query(collection(db, COLLECTION), orderBy('createdAt', 'desc'));
-  let unsub = onSnapshot(ordered, (snapshot) => {
-    const list = snapshot.docs
-      .map((d) => ({ id: d.id, ...d.data() }))
-      .filter((d) => !(d.planId && d.planId.startsWith('APP_')));
-    setData(list);
-  }, () => {
-    unsub = onSnapshot(plain, apply, () => setData([]));
-  });
+    const unsub = onSnapshot(
+      plain,
+      apply,
+      (err) => {
+        console.warn('subscribeInstallments error, falling back to getDocs:', err);
+        getDocs(plain)
+          .then(apply)
+          .catch(() => setData([]));
+      }
+    );
 
-  return () => {
-    if (typeof unsub === 'function') unsub();
-  };
+    return () => {
+      try {
+        if (typeof unsub === 'function') unsub();
+      } catch (e) {
+        console.warn('subscribeInstallments unsub ignored:', e);
+      }
+    };
+  } catch (err) {
+    console.warn('subscribeInstallments query init failed:', err);
+    setData([]);
+    return () => {};
+  }
 }
 
 function paidDateFromTs(ts) {
@@ -87,6 +97,7 @@ function mapLedgerToInstallmentRow(entry) {
  * Dedupes when an installment already stores ledgerId.
  */
 export function subscribeInstallmentHistory(setData) {
+  if (typeof setData !== 'function') return () => {};
   let installmentRows = [];
   let ledgerRows = [];
 
@@ -109,22 +120,38 @@ export function subscribeInstallmentHistory(setData) {
     publish();
   });
 
+  const ledgerRef = collection(db, LEDGER);
   const applyLedger = (snapshot) => {
     ledgerRows = snapshot.docs.map((d) => mapLedgerToInstallmentRow({ id: d.id, ...d.data() }));
     publish();
   };
 
-  const orderedLedger = query(collection(db, LEDGER), orderBy('createdAt', 'desc'));
-  let unsubLedger = onSnapshot(orderedLedger, applyLedger, () => {
-    unsubLedger = onSnapshot(collection(db, LEDGER), applyLedger, () => {
-      ledgerRows = [];
-      publish();
-    });
-  });
+  let unsubLedger = null;
+  try {
+    unsubLedger = onSnapshot(
+      ledgerRef,
+      applyLedger,
+      (err) => {
+        console.warn('subscribeInstallmentHistory ledger error, falling back to getDocs:', err);
+        getDocs(ledgerRef)
+          .then(applyLedger)
+          .catch(() => {
+            ledgerRows = [];
+            publish();
+          });
+      }
+    );
+  } catch (e) {
+    console.warn('subscribeInstallmentHistory init failed:', e);
+  }
 
   return () => {
-    if (typeof unsubInstallments === 'function') unsubInstallments();
-    if (typeof unsubLedger === 'function') unsubLedger();
+    try {
+      if (typeof unsubInstallments === 'function') unsubInstallments();
+    } catch (e) {}
+    try {
+      if (typeof unsubLedger === 'function') unsubLedger();
+    } catch (e) {}
   };
 }
 
@@ -172,7 +199,6 @@ export async function addInstallmentFromCustomerCredit(credit) {
     planName: credit.planName || '',
     ledgerId: credit.ledgerId || '',
     note: credit.note || '',
-    weight: credit.weight || '',
     source: 'customer_cash',
   });
 }

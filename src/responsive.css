@@ -204,6 +204,15 @@
         gap: 12px;
     }
 
+    /* App Users page mobile */
+    .app-users-table-wrap {
+        display: none !important;
+    }
+
+    .app-users-cards-wrap {
+        display: flex !important;
+    }
+
     .customers-pagination .pagination-controls {
         justify-content: center;
         flex-wrap: wrap;

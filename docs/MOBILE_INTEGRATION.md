@@ -36,7 +36,7 @@ All collections use **auto-generated document IDs** unless noted. Timestamps are
 
 | Field        | Type   | Required | Description                          |
 |-------------|--------|----------|--------------------------------------|
-| cusId       | string | Yes      | Unique customer ID (e.g. "CUS-1707123456789-4521"). Web app generates this; mobile can generate similarly (timestamp + random) or use Firestore doc id. |
+| cusId       | string | Yes      | Unique customer ID (e.g. "kalyani62868055"). Format: `kalyani` followed by 8 digits. |
 | joinedDate  | string | Yes      | ISO-style date/time e.g. "2025-03-12 05:20:30" |
 | name        | string | Yes      | Full name                            |
 | password    | string | Yes      | Password (store hashed in production)|
@@ -56,7 +56,7 @@ import { db } from './firebase';
 async function addCustomer(data) {
   const joinedDate = new Date().toISOString().slice(0, 19).replace('T', ' ');
   await addDoc(collection(db, 'customers'), {
-    cusId: data.cusId,        // e.g. generate from count or backend
+    cusId: data.cusId,        // e.g. "kalyani62868055"
     joinedDate,
     name: data.name,
     password: data.password,

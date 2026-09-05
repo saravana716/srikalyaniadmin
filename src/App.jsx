@@ -13,7 +13,7 @@ import PlanPurchases from './pages/PlanPurchases';
 import Products from './pages/Products';
 import Offers from './pages/Offers';
 import AdminAccounts from './pages/AdminAccounts';
-import Notifications from './pages/Notifications';
+import AppUsers from './pages/AppUsers';
 
 function App() {
   return (
@@ -23,6 +23,7 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/customers" element={<ProtectedRoute><Customers /></ProtectedRoute>} />
+          <Route path="/app-users" element={<ProtectedRoute><AppUsers /></ProtectedRoute>} />
           <Route path="/plans" element={<ProtectedRoute><ChitFundPlans /></ProtectedRoute>} />
           <Route path="/plan-purchases" element={<ProtectedRoute><PlanPurchases /></ProtectedRoute>} />
           <Route path="/payment" element={<ProtectedRoute><Payment /></ProtectedRoute>} />
@@ -31,7 +32,6 @@ function App() {
           <Route path="/offers" element={<ProtectedRoute><Offers /></ProtectedRoute>} />
           <Route path="/gold-rate" element={<ProtectedRoute><GoldRateManage /></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
-          <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
           <Route path="/admin-accounts" element={<ProtectedRoute><AdminAccounts /></ProtectedRoute>} />
           <Route path="/" element={<Navigate to="/login" replace />} />

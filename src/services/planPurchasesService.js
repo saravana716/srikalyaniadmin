@@ -3,11 +3,14 @@ import {
   doc,
   addDoc,
   updateDoc,
+  setDoc,
   deleteDoc,
   onSnapshot,
   query,
   orderBy,
   getDocs,
+  getDocsFromServer,
+  getDocsFromCache,
   getDoc,
   serverTimestamp,
 } from 'firebase/firestore';
@@ -39,14 +42,27 @@ export function scorePlanPurchaseMatch(plan, customer) {
   const name = String(customer.name || '').trim().toLowerCase();
   const mobile = digits(customer.mobile);
 
-  const planCusId = String(plan.cusId || plan.customerId || '').trim();
+  const planCusId = String(plan.cusId || '').trim();
+  const planCustomerId = String(plan.customerId || '').trim();
   const planLinked = String(plan.linked_user_id || plan.linkedUserId || plan.userId || plan.UserId || '').trim();
   const planName = String(plan.name || plan.customerName || '').trim().toLowerCase();
   const planMobile = digits(plan.mobile || plan.Mobile || plan.parent_mobile);
 
+  // Strictly enforce Customer ID boundary: if customer has cusId or docId, reject plans with conflicting non-empty cusId or customerId
+  if (cusId && planCusId && planCusId !== cusId && planCusId !== docId) {
+    return 0;
+  }
+  if (docId && planCustomerId && planCustomerId !== docId && planCustomerId !== cusId && planCustomerId.length > 5) {
+    // Only reject if planCustomerId is a full doc ID/cusId and differs
+    if (planCusId && planCusId !== cusId && planCusId !== docId) {
+      return 0;
+    }
+  }
+
   if (cusId && planCusId && planCusId === cusId) score += 100;
   if (docId && planLinked && planLinked === docId) score += 80;
-  if (docId && (planCusId === docId || String(plan.id) === docId)) score += 70;
+  if (docId && (planCustomerId === docId || planCusId === docId || String(plan.id) === docId)) score += 70;
+  if (cusId && (planCustomerId === cusId || planLinked === cusId)) score += 70;
   if (name && planName && planName === name) score += 40;
   if (mobile && planMobile && planMobile === mobile) score += 15;
   if (String(plan.status || '').toLowerCase() === 'active') score += 5;
@@ -57,19 +73,51 @@ export function scorePlanPurchaseMatch(plan, customer) {
  * Subscribe to plan purchases (enrollments) list (real-time).
  */
 export function subscribePlanPurchases(setData) {
-  const q = query(
-    collection(db, COLLECTION),
-    orderBy('createdAt', 'desc')
-  );
-  return onSnapshot(q, (snapshot) => {
-    const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-    setData(list);
-  }, (err) => {
-    console.error('planPurchases subscribe error', err);
-    return onSnapshot(collection(db, COLLECTION), (snapshot) => {
-      setData(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
-    }, () => setData([]));
-  });
+  if (typeof setData !== 'function') return () => {};
+  try {
+    const q = query(
+      collection(db, COLLECTION),
+      orderBy('createdAt', 'desc')
+    );
+    const unsub = onSnapshot(q, (snapshot) => {
+      const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+      setData(list);
+    }, (err) => {
+      console.warn('planPurchases subscribe error, falling back to getDocs:', err);
+      getDocs(collection(db, COLLECTION)).then((snap) => {
+        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        setData(list);
+      }).catch(() => setData([]));
+    });
+
+    return () => {
+      try {
+        if (typeof unsub === 'function') unsub();
+      } catch (e) {
+        console.warn('subscribePlanPurchases unsub error ignored:', e);
+      }
+    };
+  } catch (err) {
+    console.warn('subscribePlanPurchases failed:', err);
+    getDocs(collection(db, COLLECTION)).then((snap) => {
+      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      setData(list);
+    }).catch(() => setData([]));
+    return () => {};
+  }
+}
+
+async function fetchAllPlanPurchasesDocs() {
+  try {
+    return await getDocsFromServer(collection(db, COLLECTION));
+  } catch (err) {
+    console.warn('getDocsFromServer failed, trying cache/default getDocs', err);
+    try {
+      return await getDocsFromCache(collection(db, COLLECTION));
+    } catch {
+      return await getDocs(collection(db, COLLECTION));
+    }
+  }
 }
 
 /**
@@ -77,25 +125,31 @@ export function subscribePlanPurchases(setData) {
  * Mobile apps often use cusId / linked_user_id / mobile — not customerId.
  */
 export async function findPlanPurchasesForCustomer(customer) {
-  const snap = await getDocs(collection(db, COLLECTION));
-  const all = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  if (!customer) return [];
+  try {
+    const snap = await fetchAllPlanPurchasesDocs();
+    const all = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
-  const matched = all
-    .map((plan) => ({ plan, score: scorePlanPurchaseMatch(plan, customer) }))
-    .filter(({ score }) => score >= 40) // at least name or cusId-level confidence
-    .sort((a, b) => b.score - a.score)
-    .map(({ plan, score }) => ({ ...plan, _matchScore: score }));
-
-  // Fallback: if nothing scored high, allow mobile-only matches so UI can still list options
-  if (matched.length === 0) {
-    return all
+    const matched = all
       .map((plan) => ({ plan, score: scorePlanPurchaseMatch(plan, customer) }))
-      .filter(({ score }) => score > 0)
+      .filter(({ score }) => score >= 40) // at least name or cusId-level confidence
       .sort((a, b) => b.score - a.score)
       .map(({ plan, score }) => ({ ...plan, _matchScore: score }));
-  }
 
-  return matched;
+    // Fallback: if nothing scored high, allow mobile-only matches so UI can still list options
+    if (matched.length === 0) {
+      return all
+        .map((plan) => ({ plan, score: scorePlanPurchaseMatch(plan, customer) }))
+        .filter(({ score }) => score > 0)
+        .sort((a, b) => b.score - a.score)
+        .map(({ plan, score }) => ({ ...plan, _matchScore: score }));
+    }
+
+    return matched;
+  } catch (err) {
+    console.error('findPlanPurchasesForCustomer error', err);
+    return [];
+  }
 }
 
 /**
@@ -107,54 +161,81 @@ export function pickBestPlanPurchase(plans = []) {
 }
 
 /**
- * Add cash amount onto a plan purchase's amount (and savedAmount).
+ * Add cash amount onto a plan purchase's amount (and savedAmount),
+ * calculating incremental gold weight from today's rate and quality,
+ * and summing with the previous saved weight value.
  */
-export async function creditPlanPurchaseAmount(planPurchaseId, creditAmount, paymentMode = 'Cash') {
+export async function creditPlanPurchaseAmount(planPurchaseId, creditAmount, paymentMode = 'Cash', options = {}) {
   const ref = doc(db, COLLECTION, planPurchaseId);
   const snap = await getDoc(ref);
   if (!snap.exists()) throw new Error('Plan purchase not found');
   const data = snap.data();
-  const baseAmount = Number(data.amount) || 0;
-  const saved = Number(data.savedAmount ?? data.SavedAmount) || 0;
-  const add = Number(creditAmount) || 0;
-  const savedAfter = saved + add;
-  const amountAfter = savedAfter;
-
-  // Calculate new installments count
-  const currentInstallments = parseInt(data.paidInstallments) || 0;
-  const installmentsToAdd = baseAmount > 0 ? Math.max(1, Math.floor(add / baseAmount)) : 1;
-  const paidInstallmentsAfter = currentInstallments + installmentsToAdd;
-
-  let newSavedWeight = null;
-  let addedWeight = 0;
-  try {
-    const latestRates = await getLatestMetalRates();
-    const { ratePerGram } = pickRateForPlan(data, latestRates);
-    // Only calculate weight for the NEW amount added, at today's rate
-    addedWeight = calcSavedWeightGrams(add, ratePerGram);
-    const currentWeight = parseFloat(data.savedWeight) || 0;
-    newSavedWeight = Number((currentWeight + addedWeight).toFixed(3));
-  } catch (e) {
-    console.warn('Could not compute savedWeight from gold rate', e);
+  const planStatus = String(data.status || '').trim().toLowerCase();
+  if (['closed', 'cancelled', 'closed account', 'cancelled chit'].includes(planStatus)) {
+    throw new Error(`Cannot add cash to plan "${data.planName || data.name || 'Scheme'}" because its status is ${data.status || 'Closed'}`);
   }
 
+  const current = parseMoney(data.amount ?? data.Amount);
+  const saved = parseMoney(data.savedAmount ?? data.SavedAmount);
+  const add = Number(creditAmount) || 0;
+  const amountAfter = current; // Keep Base Amount unchanged!
+  const savedAfter = saved + add;
+
+  // Previous saved gold weight
+  const prevWeight = Number(data.savedWeight ?? data.SavedWeight ?? data.weight ?? 0) || 0;
+
+  // Determine rate based on metal and quality/purity
+  let ratePerGram = options.ratePerGram ? Number(options.ratePerGram) : null;
+  let metal = 'Gold';
+  let quality = options.quality || data.quality || data.purity || '';
+  try {
+    const latestRates = await getLatestMetalRates();
+    const picked = pickRateForPlan(data, latestRates, quality);
+    if (!ratePerGram) {
+      ratePerGram = picked.ratePerGram;
+    }
+    metal = picked.metal;
+    quality = quality || picked.quality;
+  } catch (e) {
+    console.warn('Could not compute metal rate', e);
+  }
+
+  // Calculate new gold weight bought by THIS payment
+  let addedWeight = 0;
+  if (ratePerGram && ratePerGram > 0 && add > 0) {
+    addedWeight = Number((add / ratePerGram).toFixed(4));
+  }
+
+  // Sum previous value + newly bought weight
+  let totalSavedWeight = prevWeight + addedWeight;
+  if (prevWeight === 0 && current > 0 && ratePerGram > 0) {
+    // If this is the very first time weight is calculated, maybe use savedAfter
+    totalSavedWeight = Number((savedAfter / ratePerGram).toFixed(4));
+    addedWeight = Number((add / ratePerGram).toFixed(4));
+  } else {
+    totalSavedWeight = Number(totalSavedWeight.toFixed(4));
+  }
+
+  const currentPaid = Number(data.paidInstallments ?? data.PaidInstallments ?? 0) || 0;
+  const nextPaidInstallments = currentPaid + 1;
+  const targetDuration = Number(data.durationMonths || data.totalInstallments || 11);
+
   const payload = {
+    // DO NOT OVERWRITE amount/Amount as it stores the Base Installment Amount
     savedAmount: savedAfter,
-    paidInstallments: paidInstallmentsAfter,
+    paidInstallments: nextPaidInstallments,
+    savedWeight: totalSavedWeight,
+    lastAddedWeight: addedWeight,
+    lastRatePerGram: ratePerGram || null,
+    quality: quality || '22K (916)',
+    metal: metal,
     lastPaymentMode: paymentMode,
     lastCreditAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
-  if (newSavedWeight != null) {
-    payload.savedWeight = newSavedWeight;
-  }
 
-  // Update status if completed
-  const totalInstallments = data.plan === 'Daily' ? 365 : 11;
-  if (paidInstallmentsAfter >= totalInstallments) {
-    payload.status = 'Closed';
-  } else if (data.status === 'Pending') {
-    payload.status = 'Active';
+  if (nextPaidInstallments >= targetDuration && String(data.status || '').toLowerCase() === 'active') {
+    payload.status = 'Completed';
   }
 
   await updateDoc(ref, payload);
@@ -162,10 +243,14 @@ export async function creditPlanPurchaseAmount(planPurchaseId, creditAmount, pay
   return {
     amountAfter,
     savedAfter,
-    savedWeight: payload.savedWeight ?? null,
+    paidInstallments: nextPaidInstallments,
+    savedWeight: totalSavedWeight,
     addedWeight,
+    ratePerGram,
+    quality,
     planName: data.planName || data.name || '',
-    previousAmount: saved,
+    previousAmount: current,
+    previousWeight: prevWeight,
   };
 }
 
@@ -194,15 +279,28 @@ export async function setPlanPurchaseAmount(planPurchaseId, absoluteAmount, paym
 }
 
 export async function addPlanPurchase(data) {
+  const startDate = data.startDate || new Date().toISOString().slice(0, 10);
   const ref = await addDoc(collection(db, COLLECTION), {
     customerId: data.customerId ?? '',
+    cusId: data.cusId ?? '',
     customerName: data.customerName ?? '',
+    name: data.customerName ?? data.name ?? '',
+    mobile: data.mobile ?? '',
+    parent_mobile: data.mobile ?? '',
     planId: data.planId ?? '',
     planName: data.planName ?? '',
-    startDate: data.startDate ?? '',
+    plan: data.plan || data.planType || 'Monthly',
+    type: 'scheme_enrollment',
+    startDate: startDate,
+    joinedDate: startDate,
     status: data.status ?? 'Active',
     amount: Number(data.amount) || 0,
     savedAmount: Number(data.savedAmount) || 0,
+    savedWeight: Number(data.savedWeight) || 0,
+    paidInstallments: Number(data.paidInstallments) || 0,
+    durationMonths: Number(data.durationMonths) || 11,
+    nomineeName: data.nomineeName || '',
+    nomineeRelation: data.nomineeRelation || '',
     createdAt: serverTimestamp(),
   });
   return { id: ref.id };
@@ -215,22 +313,80 @@ export async function updatePlanPurchase(id, data) {
   });
 }
 
-export async function cancelPlanPurchase(id, cancelData) {
-  await updateDoc(doc(db, COLLECTION, id), {
+export async function closePlanPurchase(id, closeData = {}) {
+  if (!id) throw new Error('Plan ID is required to close account');
+  const name = String(closeData.closeName || closeData.cancelName || '').trim();
+  const location = String(closeData.closeLocation || closeData.cancelLocation || '').trim();
+  const address = String(closeData.closeAddress || closeData.cancelAddress || '').trim();
+  const details = String(closeData.closeDetails || closeData.cancelReason || '').trim();
+  const monthsPaid = closeData.monthsPaid !== '' && closeData.monthsPaid != null
+    ? Number(closeData.monthsPaid)
+    : null;
+
+  const payload = {
+    status: 'Closed',
+    closeName: name,
+    closeLocation: location,
+    closeAddress: address,
+    closeDetails: details,
+    monthsPaid,
+    closedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
+
+  // 1. Update/Upsert in planPurchases collection
+  const planRef = doc(db, COLLECTION, id);
+  await setDoc(planRef, payload, { merge: true });
+
+  // 2. Also sync to customer document if ID matches
+  try {
+    const custRef = doc(db, 'customers', id);
+    const snap = await getDoc(custRef);
+    if (snap.exists()) {
+      await updateDoc(custRef, {
+        planStatus: 'Closed',
+        schemeStatus: 'Closed',
+        updatedAt: serverTimestamp(),
+      });
+    }
+  } catch (e) {
+    console.warn('Sync customer status on close warning:', e);
+  }
+}
+
+export async function cancelPlanPurchase(id, cancelData = {}) {
+  if (!id) throw new Error('Plan ID is required to cancel chit');
+  const payload = {
     status: 'Cancelled',
     cancelName: cancelData.cancelName || '',
     cancelLocation: cancelData.cancelLocation || '',
     cancelAddress: cancelData.cancelAddress || '',
     cancelReason: cancelData.cancelReason || '',
-    monthsPaid: cancelData.monthsPaid,
+    monthsPaid: cancelData.monthsPaid != null && cancelData.monthsPaid !== '' ? Number(cancelData.monthsPaid) : null,
     penaltyAmount: Number(cancelData.penaltyAmount) || 0,
     signedCancelFormUrl: cancelData.signedCancelFormUrl || '',
-    // Keep empty legacy signature fields for older cancelled records
-    authoritySignature: cancelData.authoritySignature || '',
-    customerSignature: cancelData.customerSignature || '',
     cancelledAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-  });
+  };
+
+  // 1. Update/Upsert in planPurchases collection
+  const planRef = doc(db, COLLECTION, id);
+  await setDoc(planRef, payload, { merge: true });
+
+  // 2. Also sync to customer document if ID matches
+  try {
+    const custRef = doc(db, 'customers', id);
+    const snap = await getDoc(custRef);
+    if (snap.exists()) {
+      await updateDoc(custRef, {
+        planStatus: 'Cancelled',
+        schemeStatus: 'Cancelled',
+        updatedAt: serverTimestamp(),
+      });
+    }
+  } catch (e) {
+    console.warn('Sync customer status on cancel warning:', e);
+  }
 }
 
 export async function deletePlanPurchase(id) {
