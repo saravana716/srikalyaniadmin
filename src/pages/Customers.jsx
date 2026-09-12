@@ -33,6 +33,7 @@ import AddFundsModal from '../components/AddFundsModal';
 import CustomerPaymentHistoryModal from '../components/CustomerPaymentHistoryModal';
 import { useLatestMetalRates } from '../hooks/useLatestMetalRates';
 import { formatSavedWeightForDisplay, savedWeightMeta } from '../utils/weightUtils';
+import { getPaginationRange } from '../utils/paginationUtils';
 
 const MAROON = '#801A39';
 const LIGHT_GRAY = '#F0F0F0';
@@ -850,7 +851,7 @@ const Customers = () => {
     closeMenus();
     setDeleting(true);
     try {
-      await deleteCustomerFromDb(row.id);
+      await deleteCustomerFromDb(row);
     } catch (e) {
       console.error('Delete customer failed', e);
       alert(e?.message || 'Failed to delete customer');
@@ -1228,28 +1229,27 @@ const Customers = () => {
             >
               Previous
             </button>
-            <button
-              style={{ ...styles.pagBtn, ...(currentPage === 1 ? styles.pagBtnActive : {}) }}
-              onClick={() => setCurrentPage(1)}
-            >
-              1
-            </button>
-            <button
-              style={{ ...styles.pagBtn, ...(currentPage === 2 ? styles.pagBtnActive : {}) }}
-              onClick={() => setCurrentPage(2)}
-            >
-              2
-            </button>
-            <button
-              style={{ ...styles.pagBtn, ...(currentPage === 3 ? styles.pagBtnActive : {}) }}
-              onClick={() => setCurrentPage(3)}
-            >
-              3
-            </button>
-            <button style={styles.pagBtn}>...</button>
+            {getPaginationRange(currentPage, totalPages).map((page, idx) => (
+              typeof page === 'number' ? (
+                <button
+                  key={`page-${page}`}
+                  style={{
+                    ...styles.pagBtn,
+                    ...(currentPage === page ? styles.pagBtnActive : {}),
+                  }}
+                  onClick={() => setCurrentPage(page)}
+                >
+                  {page}
+                </button>
+              ) : (
+                <span key={`dots-${idx}`} style={{ padding: '0 6px', color: '#666', fontSize: '14px', alignSelf: 'center', userSelect: 'none' }}>
+                  ...
+                </span>
+              )
+            ))}
             <button
               style={styles.pagBtn}
-              disabled={currentPage === totalPages}
+              disabled={currentPage >= totalPages}
               onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
             >
               Next

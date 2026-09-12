@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Sidebar from '../components/Sidebar';
 import ActionMenu from '../components/ActionMenu';
 import Button from '../components/Button';
-import { FiSettings, FiBell, FiMenu, FiX, FiSearch, FiLayers, FiCheckCircle, FiDollarSign, FiPlusCircle } from 'react-icons/fi';
+import { FiSettings, FiBell, FiMenu, FiX, FiSearch, FiLayers, FiCheckCircle, FiDollarSign, FiPlusCircle, FiTrash2 } from 'react-icons/fi';
 import { GiGoldBar } from 'react-icons/gi';
 import { MdKeyboardArrowUp, MdKeyboardArrowDown } from 'react-icons/md';
 import {
@@ -24,6 +24,7 @@ import { formatINR } from '../utils/currencyUtils';
 import { uploadCancelChitForm } from '../utils/uploadImage';
 import { useLatestMetalRates } from '../hooks/useLatestMetalRates';
 import { parseMoneyAmount, formatSavedWeightForDisplay } from '../utils/weightUtils';
+import { getPaginationRange } from '../utils/paginationUtils';
 
 const MAROON = '#801A39';
 const LIGHT_GRAY = '#F0F0F0';
@@ -234,6 +235,8 @@ const PlanPurchases = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [schemeFilter, setSchemeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const { rates } = useLatestMetalRates();
 
   useEffect(() => {
@@ -376,6 +379,59 @@ const PlanPurchases = () => {
     return filteredList.slice(start, start + pageSize);
   }, [filteredList, currentPage]);
 
+  const isAllSelected = useMemo(() => {
+    if (!pageRows.length) return false;
+    return pageRows.every((r) => selectedIds.has(r.id));
+  }, [pageRows, selectedIds]);
+
+  const toggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        pageRows.forEach((r) => next.delete(r.id));
+        return next;
+      });
+    } else {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        pageRows.forEach((r) => next.add(r.id));
+        return next;
+      });
+    }
+  };
+
+  const toggleSelectRow = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    const count = selectedIds.size;
+    if (!count) return;
+    if (
+      !window.confirm(
+        `Are you sure you want to delete ${count} selected scheme enrollment${count === 1 ? '' : 's'} and all associated payment history?`
+      )
+    )
+      return;
+
+    setBulkDeleting(true);
+    try {
+      const selectedRows = effectiveList.filter((r) => selectedIds.has(r.id));
+      await Promise.all(selectedRows.map((r) => deletePlanPurchaseFromDb(r)));
+      setSelectedIds(new Set());
+    } catch (e) {
+      console.error('Bulk delete failed', e);
+      alert(e?.message || 'Failed to delete selected plan purchases');
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
   const handleSave = async (data, id) => {
     setSaveError(null);
     setSaving(true);
@@ -432,7 +488,7 @@ const PlanPurchases = () => {
     if (!window.confirm(`Delete plan purchase for "${row.customerName || row.name || 'this customer'}"?`)) return;
     setDeleting(true);
     try {
-      await deletePlanPurchaseFromDb(row.id);
+      await deletePlanPurchaseFromDb(row);
       setOpenActionId(null);
       setOpenCardActionId(null);
       setActionAnchorEl(null);
@@ -678,40 +734,84 @@ const PlanPurchases = () => {
 
         {/* Filters & Search Toolbar */}
         <div style={styles.toolbar}>
-          <div style={styles.searchWrap}>
-            <FiSearch style={{ color: '#999', marginRight: 8 }} />
-            <input
-              type="text"
-              placeholder="Search customer, ID, mobile, scheme…"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              style={styles.searchInput}
-            />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', flex: 1 }}>
+            <div style={styles.searchWrap}>
+              <FiSearch style={{ color: '#999', marginRight: 8 }} />
+              <input
+                type="text"
+                placeholder="Search customer, ID, mobile, scheme…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={styles.searchInput}
+              />
+            </div>
+            <select
+              value={schemeFilter}
+              onChange={(e) => setSchemeFilter(e.target.value)}
+              style={styles.filterSelect}
+              aria-label="Filter by scheme"
+            >
+              <option value="all">All Chit Schemes</option>
+              {uniqueSchemes.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              style={styles.filterSelect}
+              aria-label="Filter by status"
+            >
+              <option value="all">All Statuses</option>
+              <option value="Active">Active</option>
+              <option value="Completed">Completed</option>
+              <option value="Closed">Closed</option>
+              <option value="Cancelled">Cancelled</option>
+              <option value="Inactive">Inactive</option>
+            </select>
           </div>
-          <select
-            value={schemeFilter}
-            onChange={(e) => setSchemeFilter(e.target.value)}
-            style={styles.filterSelect}
-            aria-label="Filter by scheme"
-          >
-            <option value="all">All Chit Schemes</option>
-            {uniqueSchemes.map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            style={styles.filterSelect}
-            aria-label="Filter by status"
-          >
-            <option value="all">All Statuses</option>
-            <option value="Active">Active</option>
-            <option value="Completed">Completed</option>
-            <option value="Closed">Closed</option>
-            <option value="Cancelled">Cancelled</option>
-            <option value="Inactive">Inactive</option>
-          </select>
+
+          {selectedIds.size > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button
+                type="button"
+                onClick={handleBulkDelete}
+                disabled={bulkDeleting}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '9px 16px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  backgroundColor: '#dc2626',
+                  color: '#fff',
+                  fontSize: '13.5px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 6px rgba(220,38,38,0.25)',
+                }}
+              >
+                <FiTrash2 size={16} />
+                <span>{bulkDeleting ? 'Deleting…' : `Delete Selected (${selectedIds.size})`}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedIds(new Set())}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#6b7280',
+                  fontSize: '12.5px',
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                  fontWeight: '500',
+                }}
+              >
+                Clear Selection
+              </button>
+            </div>
+          )}
         </div>
 
         <ActionMenu
@@ -769,6 +869,15 @@ const PlanPurchases = () => {
           <table style={styles.table} className="plan-purchases-table">
             <thead>
               <tr>
+                <th style={{ ...styles.th, width: '44px', textAlign: 'center', paddingLeft: '12px', paddingRight: '12px' }}>
+                  <input
+                    type="checkbox"
+                    checked={isAllSelected}
+                    onChange={toggleSelectAll}
+                    title="Select / Unselect all on current page"
+                    style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: MAROON }}
+                  />
+                </th>
                 <th style={{ ...styles.th, minWidth: '160px' }}>
                   <span className="th-content">Customer <MdKeyboardArrowUp size={14} /><MdKeyboardArrowDown size={14} /></span>
                 </th>
@@ -789,7 +898,21 @@ const PlanPurchases = () => {
             </thead>
             <tbody>
               {(loading ? [] : pageRows).map((row) => (
-                <tr key={row.id} style={styles.tr}>
+                <tr
+                  key={row.id}
+                  style={{
+                    ...styles.tr,
+                    backgroundColor: selectedIds.has(row.id) ? '#fdf2f4' : 'transparent',
+                  }}
+                >
+                  <td style={{ ...styles.td, width: '44px', textAlign: 'center', paddingLeft: '12px', paddingRight: '12px' }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(row.id)}
+                      onChange={() => toggleSelectRow(row.id)}
+                      style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: MAROON }}
+                    />
+                  </td>
                   <td style={styles.td}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                       <span style={{ fontWeight: 700, fontSize: '13.5px', color: '#111827' }}>
@@ -875,7 +998,7 @@ const PlanPurchases = () => {
               ))}
               {!loading && pageRows.length === 0 && (
                 <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: '32px', color: '#666' }}>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '32px', color: '#666' }}>
                     No enrolled chit plans found matching criteria.
                   </td>
                 </tr>
@@ -890,9 +1013,25 @@ const PlanPurchases = () => {
           <span style={styles.pageInfo}>Showing page {currentPage} / {totalPages}</span>
           <div style={styles.paginationControls} className="pagination-controls">
             <button style={styles.pagBtn} disabled={currentPage === 1} onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}>Previous</button>
-            <button style={{ ...styles.pagBtn, ...(currentPage === 1 ? styles.pagBtnActive : {}) }} onClick={() => setCurrentPage(1)}>1</button>
-            <button style={styles.pagBtn}>...</button>
-            <button style={styles.pagBtn} disabled={currentPage === totalPages} onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}>Next</button>
+            {getPaginationRange(currentPage, totalPages).map((page, idx) => (
+              typeof page === 'number' ? (
+                <button
+                  key={`page-${page}`}
+                  style={{
+                    ...styles.pagBtn,
+                    ...(currentPage === page ? styles.pagBtnActive : {}),
+                  }}
+                  onClick={() => setCurrentPage(page)}
+                >
+                  {page}
+                </button>
+              ) : (
+                <span key={`dots-${idx}`} style={{ padding: '0 6px', color: '#666', fontSize: '14px', alignSelf: 'center', userSelect: 'none' }}>
+                  ...
+                </span>
+              )
+            ))}
+            <button style={styles.pagBtn} disabled={currentPage >= totalPages} onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}>Next</button>
           </div>
         </div>
       </main>

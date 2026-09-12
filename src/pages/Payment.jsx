@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Sidebar from '../components/Sidebar';
 import ActionMenu from '../components/ActionMenu';
 import Button from '../components/Button';
-import { FiSettings, FiBell, FiMenu, FiX, FiSearch, FiDollarSign, FiCalendar, FiPieChart, FiDownload, FiPlusCircle, FiCreditCard } from 'react-icons/fi';
+import { FiSettings, FiBell, FiMenu, FiX, FiSearch, FiDollarSign, FiCalendar, FiPieChart, FiDownload, FiPlusCircle, FiCreditCard, FiTrash2 } from 'react-icons/fi';
 import { MdKeyboardArrowUp, MdKeyboardArrowDown } from 'react-icons/md';
 import {
   subscribeAllPayments,
@@ -14,6 +14,7 @@ import { formatINR } from '../utils/currencyUtils';
 import { formatPaidDate } from '../utils/dateUtils';
 import { downloadPaymentReceipt } from '../utils/paymentReceiptPdf';
 import ChitPaymentModal from '../components/ChitPaymentModal';
+import { getPaginationRange } from '../utils/paginationUtils';
 
 const MAROON = '#801A39';
 const LIGHT_GRAY = '#F0F0F0';
@@ -297,12 +298,63 @@ const Payment = () => {
     if (currentPage > totalPages) setCurrentPage(totalPages);
   }, [currentPage, totalPages]);
 
+  const [selectedKeys, setSelectedKeys] = useState(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
   const pageRows = useMemo(() => {
     const start = (currentPage - 1) * PAGE_SIZE;
     return filtered.slice(start, start + PAGE_SIZE);
   }, [filtered, currentPage]);
 
   const rowKey = (row) => `${row.source}:${row.id}`;
+
+  const isAllSelected = useMemo(() => {
+    if (!pageRows.length) return false;
+    return pageRows.every((r) => selectedKeys.has(rowKey(r)));
+  }, [pageRows, selectedKeys]);
+
+  const toggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedKeys((prev) => {
+        const next = new Set(prev);
+        pageRows.forEach((r) => next.delete(rowKey(r)));
+        return next;
+      });
+    } else {
+      setSelectedKeys((prev) => {
+        const next = new Set(prev);
+        pageRows.forEach((r) => next.add(rowKey(r)));
+        return next;
+      });
+    }
+  };
+
+  const toggleSelectRow = (key) => {
+    setSelectedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    const count = selectedKeys.size;
+    if (!count) return;
+    if (!window.confirm(`Are you sure you want to delete ${count} selected payment record${count === 1 ? '' : 's'}?`)) return;
+
+    setBulkDeleting(true);
+    try {
+      const selectedRows = payments.filter((r) => selectedKeys.has(rowKey(r)));
+      await Promise.all(selectedRows.map((r) => deleteUnifiedPayment(r)));
+      setSelectedKeys(new Set());
+    } catch (e) {
+      console.error('Bulk delete payments failed', e);
+      alert(e?.message || 'Failed to delete selected payment records');
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
 
   const findRow = (key) => payments.find((r) => rowKey(r) === key);
 
@@ -343,11 +395,7 @@ const Payment = () => {
 
   const handleDelete = async (row) => {
     if (!row?.id) return;
-    if (!row._canDelete || row._fromLedger) {
-      alert('This Add Cash entry cannot be deleted from Payment. Manage it from Customers.');
-      return;
-    }
-    if (!window.confirm('Delete this payment?')) return;
+    if (!window.confirm(`Are you sure you want to delete this payment record (${row.customerName || 'Payment'})?`)) return;
     setDeleting(true);
     try {
       await deleteUnifiedPayment(row);
@@ -516,6 +564,19 @@ const Payment = () => {
             <option value="customer_cash">Add Cash</option>
             <option value="payment">Manual Payments</option>
           </select>
+          {selectedKeys.size > 0 && (
+            <Button
+              type="button"
+              variant="danger"
+              onClick={handleBulkDelete}
+              loading={bulkDeleting}
+              loadingText="Deleting..."
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            >
+              <FiTrash2 size={14} />
+              Delete Selected ({selectedKeys.size})
+            </Button>
+          )}
         </div>
 
         <p style={styles.resultMeta}>
@@ -527,6 +588,15 @@ const Payment = () => {
           <table style={styles.table} className="payment-table">
             <thead>
               <tr>
+                <th style={{ ...styles.th, width: 40, textAlign: 'center' }}>
+                  <input
+                    type="checkbox"
+                    checked={isAllSelected}
+                    onChange={toggleSelectAll}
+                    title="Select all on this page"
+                    style={{ cursor: 'pointer', width: 16, height: 16 }}
+                  />
+                </th>
                 <th style={styles.th}><span className="th-content">Customer <MdKeyboardArrowUp size={14} /><MdKeyboardArrowDown size={14} /></span></th>
                 <th style={styles.th}><span className="th-content">Chit Scheme <MdKeyboardArrowUp size={14} /><MdKeyboardArrowDown size={14} /></span></th>
                 <th style={styles.th}><span className="th-content">Source <MdKeyboardArrowUp size={14} /><MdKeyboardArrowDown size={14} /></span></th>
@@ -539,7 +609,21 @@ const Payment = () => {
             </thead>
             <tbody>
               {(loading ? [] : pageRows).map((row) => (
-                <tr key={rowKey(row)} style={styles.tr}>
+                <tr
+                  key={rowKey(row)}
+                  style={{
+                    ...styles.tr,
+                    backgroundColor: selectedKeys.has(rowKey(row)) ? '#fff1f2' : undefined,
+                  }}
+                >
+                  <td style={{ ...styles.td, textAlign: 'center' }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedKeys.has(rowKey(row))}
+                      onChange={() => toggleSelectRow(rowKey(row))}
+                      style={{ cursor: 'pointer', width: 16, height: 16 }}
+                    />
+                  </td>
                   <td style={styles.td}>
                     <div style={{ fontWeight: 600 }}>{row.customerName || '—'}</div>
                     {row.cusId ? (
@@ -601,7 +685,7 @@ const Payment = () => {
               ))}
               {!loading && pageRows.length === 0 && (
                 <tr>
-                  <td style={{ ...styles.td, textAlign: 'center', padding: 32, color: '#666' }} colSpan={8}>
+                  <td style={{ ...styles.td, textAlign: 'center', padding: 32, color: '#666' }} colSpan={9}>
                     No payments found matching criteria.
                   </td>
                 </tr>
@@ -675,8 +759,25 @@ const Payment = () => {
           <span style={styles.pageInfo}>Showing page {currentPage} / {totalPages}</span>
           <div style={styles.paginationControls} className="pagination-controls">
             <button style={styles.pagBtn} disabled={currentPage === 1} onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}>Previous</button>
-            <button style={{ ...styles.pagBtn, ...(currentPage === 1 ? styles.pagBtnActive : {}) }} onClick={() => setCurrentPage(1)}>1</button>
-            <button style={styles.pagBtn} disabled={currentPage === totalPages} onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}>Next</button>
+            {getPaginationRange(currentPage, totalPages).map((page, idx) => (
+              typeof page === 'number' ? (
+                <button
+                  key={`page-${page}`}
+                  style={{
+                    ...styles.pagBtn,
+                    ...(currentPage === page ? styles.pagBtnActive : {}),
+                  }}
+                  onClick={() => setCurrentPage(page)}
+                >
+                  {page}
+                </button>
+              ) : (
+                <span key={`dots-${idx}`} style={{ padding: '0 6px', color: '#666', fontSize: '14px', alignSelf: 'center', userSelect: 'none' }}>
+                  ...
+                </span>
+              )
+            ))}
+            <button style={styles.pagBtn} disabled={currentPage >= totalPages} onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}>Next</button>
           </div>
         </div>
       </main>

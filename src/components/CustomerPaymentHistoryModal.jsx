@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { FiX, FiSearch, FiCreditCard, FiDollarSign, FiClock, FiCheckCircle, FiLayers, FiCalendar } from 'react-icons/fi';
+import { FiX, FiSearch, FiCreditCard, FiDollarSign, FiClock, FiCheckCircle, FiLayers, FiCalendar, FiTrash2 } from 'react-icons/fi';
 import Button from './Button';
 import { subscribeCustomerAllPayments, subscribeCustomerPlans } from '../services/customersService';
+import { deleteUnifiedPayment } from '../services/paymentsService';
 import { formatINR } from '../utils/currencyUtils';
 import { formatToIST, formatPaidDate } from '../utils/dateUtils';
 
@@ -417,6 +418,7 @@ const CustomerPaymentHistoryModal = ({ customer, initialPlan = 'all', onClose, o
                     <th style={styles.th}>Plan Name</th>
                     <th style={styles.th}>Status</th>
                     <th style={styles.th}>Note / Remarks</th>
+                    <th style={styles.th}>Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -427,6 +429,16 @@ const CustomerPaymentHistoryModal = ({ customer, initialPlan = 'all', onClose, o
                       item.status === 'Completed' || item.status === 'Paid'
                         ? styles.statusCompleted
                         : styles.statusPending;
+
+                    const handleDeletePayment = async (row) => {
+                      if (!window.confirm(`Are you sure you want to delete this payment entry (${formatINR(row.paidAmount || row.amount || 0)})?`)) return;
+                      try {
+                        await deleteUnifiedPayment(row);
+                      } catch (err) {
+                        console.error('Delete payment failed', err);
+                        alert(err?.message || 'Failed to delete payment');
+                      }
+                    };
 
                     return (
                       <tr key={item.id} style={styles.tr}>
@@ -462,6 +474,28 @@ const CustomerPaymentHistoryModal = ({ customer, initialPlan = 'all', onClose, o
                         </td>
                         <td style={styles.td}>
                           <span style={styles.noteText}>{item.note || '—'}</span>
+                        </td>
+                        <td style={styles.td}>
+                          <button
+                            type="button"
+                            onClick={() => handleDeletePayment(item)}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: '#dc2626',
+                              cursor: 'pointer',
+                              padding: '4px 8px',
+                              borderRadius: '4px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              fontSize: '12px',
+                              fontWeight: '600',
+                            }}
+                            title="Delete Payment Record"
+                          >
+                            <FiTrash2 size={14} /> Delete
+                          </button>
                         </td>
                       </tr>
                     );

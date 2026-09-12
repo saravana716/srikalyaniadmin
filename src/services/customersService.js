@@ -43,7 +43,7 @@ export async function generateUniqueCusId() {
 }
 
 export function subscribeCustomers(setData) {
-  if (typeof setData !== 'function') return () => {};
+  if (typeof setData !== 'function') return () => { };
   try {
     const q = query(
       collection(db, COLLECTION),
@@ -78,7 +78,7 @@ export function subscribeCustomers(setData) {
       const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       setData(list);
     }).catch(() => setData([]));
-    return () => {};
+    return () => { };
   }
 }
 
@@ -88,7 +88,7 @@ export function subscribeCustomers(setData) {
 export function subscribeCustomerLedger(customerId, setData) {
   if (!customerId || typeof setData !== 'function') {
     if (typeof setData === 'function') setData([]);
-    return () => {};
+    return () => { };
   }
 
   try {
@@ -125,7 +125,7 @@ export function subscribeCustomerLedger(customerId, setData) {
   } catch (err) {
     console.warn('subscribeCustomerLedger query init failed:', err);
     setData([]);
-    return () => {};
+    return () => { };
   }
 }
 
@@ -140,7 +140,7 @@ function ledgerTime(entry) {
 export function subscribePlanPaymentHistory(planRow, setData) {
   if (!planRow) {
     setData([]);
-    return () => {};
+    return () => { };
   }
 
   const rowId = String(planRow.id || '').trim().toLowerCase();
@@ -315,6 +315,7 @@ export async function creditCustomerAccount(customerId, credit) {
   // Update customer account balance and accumulated gold weight
   await updateDoc(ref, {
     accountBalance: next,
+    amount: next,
     savedWeight: nextCustWeight,
     goldWeight: nextCustWeight,
     lastRatePerGram: ratePerGram,
@@ -374,8 +375,188 @@ export async function creditCustomerAccount(customerId, credit) {
   };
 }
 
-export async function deleteCustomer(id) {
-  await deleteDoc(doc(db, COLLECTION, id));
+/**
+ * Cascade delete user/customer and ALL associated records across DB:
+ * - app_users
+ * - customers
+ * - planPurchases (chit fund scheme enrollments)
+ * - payments (direct payments history)
+ * - installments (installment history)
+ * - customerLedger (add cash / account credit ledger history)
+ */
+export async function deleteUserCascade(target) {
+  if (!target) return;
+
+  let targetId = typeof target === 'string' ? target : target?.id;
+  let targetCusId = typeof target === 'object' ? target?.cusId : null;
+  let targetCustomerId = typeof target === 'object' ? target?.customerId : null;
+  let targetLinkedUserId = typeof target === 'object' ? (target?.linked_user_id || target?.linkedUserId || target?.userId || target?.UserId) : null;
+  let targetMobile = typeof target === 'object' ? (target?.mobile || target?.parent_mobile || target?.Mobile) : null;
+  let targetEmail = typeof target === 'object' ? target?.email : null;
+
+  // Gather all potential document IDs & cusIds to fetch metadata
+  const docIdsToLookup = [targetId, targetCustomerId, targetLinkedUserId, targetCusId].filter(Boolean);
+
+  for (const lookupId of docIdsToLookup) {
+    if (typeof lookupId === 'string' && lookupId.trim()) {
+      try {
+        const appUserDoc = await getDoc(doc(db, 'app_users', lookupId));
+        if (appUserDoc.exists()) {
+          const d = appUserDoc.data();
+          targetCusId = targetCusId || d.cusId;
+          targetMobile = targetMobile || d.mobile || d.parent_mobile;
+          targetEmail = targetEmail || d.email;
+        }
+      } catch (e) {}
+
+      try {
+        const custDoc = await getDoc(doc(db, 'customers', lookupId));
+        if (custDoc.exists()) {
+          const d = custDoc.data();
+          targetCusId = targetCusId || d.cusId;
+          targetMobile = targetMobile || d.mobile || d.parent_mobile;
+          targetEmail = targetEmail || d.email;
+        }
+      } catch (e) {}
+    }
+  }
+
+  // Build sets of search keys
+  const idSet = new Set(
+    [targetId, targetCusId, targetCustomerId, targetLinkedUserId].filter(Boolean).map((s) => String(s).trim().toLowerCase())
+  );
+  const cusIdSet = new Set(
+    [targetCusId, targetId, targetCustomerId, targetLinkedUserId].filter(Boolean).map((s) => String(s).trim().toLowerCase())
+  );
+
+  const cleanMobile = (m) => String(m || '').replace(/\D/g, '');
+  const mobileStr = cleanMobile(targetMobile);
+  const isMobileValid = mobileStr.length >= 7;
+
+  // 1. app_users docs to delete
+  const appUsersSnap = await getDocs(collection(db, 'app_users'));
+  const appUsersToDelete = appUsersSnap.docs.filter((d) => {
+    if (idSet.has(String(d.id).trim().toLowerCase())) return true;
+    const data = d.data();
+    const dCusId = String(data.cusId || '').trim().toLowerCase();
+    if (dCusId && cusIdSet.has(dCusId)) return true;
+    if (isMobileValid && cleanMobile(data.mobile) === mobileStr) return true;
+    return false;
+  });
+
+  // 2. customers docs to delete
+  const customersSnap = await getDocs(collection(db, 'customers'));
+  const customersToDelete = customersSnap.docs.filter((d) => {
+    if (idSet.has(String(d.id).trim().toLowerCase())) return true;
+    const data = d.data();
+    const dCusId = String(data.cusId || '').trim().toLowerCase();
+    if (dCusId && cusIdSet.has(dCusId)) return true;
+    if (isMobileValid && cleanMobile(data.mobile) === mobileStr) return true;
+    return false;
+  });
+
+  // 3. planPurchases docs to delete
+  const planPurchasesSnap = await getDocs(collection(db, 'planPurchases'));
+  const planPurchasesToDelete = planPurchasesSnap.docs.filter((d) => {
+    if (idSet.has(String(d.id).trim().toLowerCase())) return true;
+    const data = d.data();
+    const dCusId = String(data.cusId || '').trim().toLowerCase();
+    const dCustId = String(data.customerId || '').trim().toLowerCase();
+    const dLinked = String(
+      data.linked_user_id || data.linkedUserId || data.userId || data.UserId || ''
+    ).trim().toLowerCase();
+
+    if (dCusId && cusIdSet.has(dCusId)) return true;
+    if (dCustId && (idSet.has(dCustId) || cusIdSet.has(dCustId))) return true;
+    if (dLinked && (idSet.has(dLinked) || cusIdSet.has(dLinked))) return true;
+    if (
+      isMobileValid &&
+      (cleanMobile(data.mobile) === mobileStr || cleanMobile(data.parent_mobile) === mobileStr)
+    )
+      return true;
+    return false;
+  });
+
+  const deletedPlanIds = new Set(
+    planPurchasesToDelete.map((d) => String(d.id).trim().toLowerCase())
+  );
+
+  // 4. payments docs to delete
+  const paymentsSnap = await getDocs(collection(db, 'payments'));
+  const paymentsToDelete = paymentsSnap.docs.filter((d) => {
+    if (idSet.has(String(d.id).trim().toLowerCase())) return true;
+    const data = d.data();
+    const dCusId = String(data.cusId || data.customerId || '').trim().toLowerCase();
+    const dCustId = String(data.customerId || '').trim().toLowerCase();
+    const dPlanId = String(
+      data.planId || data.planPurchaseId || data.raw?.planId || data.raw?.planPurchaseId || ''
+    ).trim().toLowerCase();
+
+    if (dPlanId && deletedPlanIds.has(dPlanId)) return true;
+    if (dCusId && (cusIdSet.has(dCusId) || idSet.has(dCusId))) return true;
+    if (dCustId && (cusIdSet.has(dCustId) || idSet.has(dCustId))) return true;
+    if (isMobileValid && cleanMobile(data.mobile || data.raw?.mobile) === mobileStr) return true;
+    return false;
+  });
+
+  // 5. installments docs to delete
+  const installmentsSnap = await getDocs(collection(db, 'installments'));
+  const installmentsToDelete = installmentsSnap.docs.filter((d) => {
+    if (idSet.has(String(d.id).trim().toLowerCase())) return true;
+    const data = d.data();
+    const dCusId = String(data.cusId || data.customerId || '').trim().toLowerCase();
+    const dCustId = String(data.customerId || '').trim().toLowerCase();
+    const dPlanId = String(data.planId || data.planPurchaseId || '').trim().toLowerCase();
+
+    if (dPlanId && deletedPlanIds.has(dPlanId)) return true;
+    if (dCusId && (cusIdSet.has(dCusId) || idSet.has(dCusId))) return true;
+    if (dCustId && (cusIdSet.has(dCustId) || idSet.has(dCustId))) return true;
+    if (isMobileValid && cleanMobile(data.mobile) === mobileStr) return true;
+    return false;
+  });
+
+  // 6. customerLedger docs to delete
+  const ledgerSnap = await getDocs(collection(db, 'customerLedger'));
+  const ledgerToDelete = ledgerSnap.docs.filter((d) => {
+    if (idSet.has(String(d.id).trim().toLowerCase())) return true;
+    const data = d.data();
+    const dCusId = String(data.cusId || data.customerId || '').trim().toLowerCase();
+    const dCustId = String(data.customerId || '').trim().toLowerCase();
+    const dPlanId = String(data.planPurchaseId || data.planId || '').trim().toLowerCase();
+
+    if (dPlanId && deletedPlanIds.has(dPlanId)) return true;
+    if (dCusId && (cusIdSet.has(dCusId) || idSet.has(dCusId))) return true;
+    if (dCustId && (cusIdSet.has(dCustId) || idSet.has(dCustId))) return true;
+    if (isMobileValid && cleanMobile(data.mobile) === mobileStr) return true;
+    return false;
+  });
+
+  // Collect all references to delete
+  const allDocsToDelete = [
+    ...appUsersToDelete,
+    ...customersToDelete,
+    ...planPurchasesToDelete,
+    ...paymentsToDelete,
+    ...installmentsToDelete,
+    ...ledgerToDelete,
+  ];
+
+  const uniqueRefPaths = new Set();
+  const deletePromises = [];
+
+  for (const docSnap of allDocsToDelete) {
+    const path = docSnap.ref.path;
+    if (!uniqueRefPaths.has(path)) {
+      uniqueRefPaths.add(path);
+      deletePromises.push(deleteDoc(docSnap.ref));
+    }
+  }
+
+  await Promise.all(deletePromises);
+}
+
+export async function deleteCustomer(target) {
+  await deleteUserCascade(target);
 }
 
 /**
@@ -386,7 +567,7 @@ export async function deleteCustomer(id) {
 export function subscribeCustomerAllPayments(customer, setData) {
   if (!customer) {
     setData([]);
-    return () => {};
+    return () => { };
   }
 
   const cid = String(customer.id || '').trim().toLowerCase();
@@ -451,7 +632,7 @@ export function subscribeCustomerAllPayments(customer, setData) {
 export function subscribeCustomerPlans(customer, setData) {
   if (!customer) {
     setData([]);
-    return () => {};
+    return () => { };
   }
 
   const cusId = String(customer.cusId || '').trim().toLowerCase();

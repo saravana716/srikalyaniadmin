@@ -6,6 +6,7 @@ import AppUserDetailModal from '../components/AppUserDetailModal';
 import EditAppUserModal from '../components/EditAppUserModal';
 import { subscribeAppUsers, updateAppUser, deleteAppUser } from '../services/appUsersService';
 import { formatToIST } from '../utils/dateUtils';
+import { getPaginationRange } from '../utils/paginationUtils';
 import {
   FiSearch,
   FiFilter,
@@ -121,7 +122,7 @@ const AppUsers = () => {
     if (!window.confirm(`Are you sure you want to delete app user "${user.name || user.cusId}"?`)) return;
     setDeleting(true);
     try {
-      await deleteAppUser(user.id);
+      await deleteAppUser(user);
       setOpenActionId(null);
       setOpenCardActionId(null);
       setActionAnchorEl(null);
@@ -501,21 +502,27 @@ const AppUsers = () => {
             >
               Previous
             </button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-              <button
-                key={page}
-                style={{
-                  ...styles.pagBtn,
-                  ...(currentPage === page ? styles.pagBtnActive : {}),
-                }}
-                onClick={() => setCurrentPage(page)}
-              >
-                {page}
-              </button>
+            {getPaginationRange(currentPage, totalPages).map((page, idx) => (
+              typeof page === 'number' ? (
+                <button
+                  key={`page-${page}`}
+                  style={{
+                    ...styles.pagBtn,
+                    ...(currentPage === page ? styles.pagBtnActive : {}),
+                  }}
+                  onClick={() => setCurrentPage(page)}
+                >
+                  {page}
+                </button>
+              ) : (
+                <span key={`dots-${idx}`} style={{ padding: '0 6px', color: '#666', fontSize: '14px', alignSelf: 'center', userSelect: 'none' }}>
+                  ...
+                </span>
+              )
             ))}
             <button
               style={styles.pagBtn}
-              disabled={currentPage === totalPages}
+              disabled={currentPage >= totalPages}
               onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
             >
               Next

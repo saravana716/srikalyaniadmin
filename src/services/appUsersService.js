@@ -71,6 +71,9 @@ export async function updateAppUser(id, data) {
   });
 }
 
-export async function deleteAppUser(id) {
-  await deleteDoc(doc(db, COLLECTION, id));
+import { deleteUserCascade } from './customersService';
+
+export async function deleteAppUser(target) {
+  await deleteUserCascade(target);
 }
+

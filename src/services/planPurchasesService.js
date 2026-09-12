@@ -178,7 +178,7 @@ export async function creditPlanPurchaseAmount(planPurchaseId, creditAmount, pay
   const current = parseMoney(data.amount ?? data.Amount);
   const saved = parseMoney(data.savedAmount ?? data.SavedAmount);
   const add = Number(creditAmount) || 0;
-  const amountAfter = current; // Keep Base Amount unchanged!
+  const amountAfter = current + add;
   const savedAfter = saved + add;
 
   // Previous saved gold weight
@@ -209,8 +209,7 @@ export async function creditPlanPurchaseAmount(planPurchaseId, creditAmount, pay
   // Sum previous value + newly bought weight
   let totalSavedWeight = prevWeight + addedWeight;
   if (prevWeight === 0 && current > 0 && ratePerGram > 0) {
-    // If this is the very first time weight is calculated, maybe use savedAfter
-    totalSavedWeight = Number((savedAfter / ratePerGram).toFixed(4));
+    totalSavedWeight = Number(((current + add) / ratePerGram).toFixed(4));
     addedWeight = Number((add / ratePerGram).toFixed(4));
   } else {
     totalSavedWeight = Number(totalSavedWeight.toFixed(4));
@@ -221,7 +220,8 @@ export async function creditPlanPurchaseAmount(planPurchaseId, creditAmount, pay
   const targetDuration = Number(data.durationMonths || data.totalInstallments || 11);
 
   const payload = {
-    // DO NOT OVERWRITE amount/Amount as it stores the Base Installment Amount
+    amount: amountAfter,
+    Amount: amountAfter,
     savedAmount: savedAfter,
     paidInstallments: nextPaidInstallments,
     savedWeight: totalSavedWeight,
@@ -389,6 +389,87 @@ export async function cancelPlanPurchase(id, cancelData = {}) {
   }
 }
 
-export async function deletePlanPurchase(id) {
-  await deleteDoc(doc(db, COLLECTION, id));
+export async function deletePlanPurchase(target) {
+  if (!target) return;
+  const planId = typeof target === 'string' ? target : target?.id;
+  const cusId = typeof target === 'object' ? target?.cusId : null;
+  const customerId = typeof target === 'object' ? target?.customerId : null;
+  const isSynthesized = typeof target === 'object' ? target?._synthesizedFromCustomer : false;
+
+  const pIdLower = String(planId || '').trim().toLowerCase();
+  const cusIdLower = String(cusId || '').trim().toLowerCase();
+  const custIdLower = String(customerId || '').trim().toLowerCase();
+
+  // 1. Delete from planPurchases collection if doc exists
+  if (planId) {
+    try {
+      await deleteDoc(doc(db, COLLECTION, planId));
+    } catch (e) {
+      console.warn('Delete planPurchase doc error:', e);
+    }
+  }
+
+  // 2. Clear or reset scheme info on matching customer doc in customers collection
+  const targetCustDocId = customerId || (isSynthesized ? planId : null);
+  if (targetCustDocId) {
+    try {
+      const custRef = doc(db, 'customers', targetCustDocId);
+      const custSnap = await getDoc(custRef);
+      if (custSnap.exists()) {
+        await updateDoc(custRef, {
+          plan: '',
+          planName: '',
+          planStatus: 'Deleted',
+          schemeStatus: 'Deleted',
+          updatedAt: serverTimestamp(),
+        });
+      }
+    } catch (e) {
+      console.warn('Update customer scheme on delete plan error:', e);
+    }
+  }
+
+  // 3. Delete from payments, installments, customerLedger
+  try {
+    const ids = new Set([pIdLower, cusIdLower, custIdLower].filter(Boolean));
+
+    // Payments
+    const paySnap = await getDocs(collection(db, 'payments'));
+    const payDeletes = paySnap.docs
+      .filter((d) => {
+        const data = d.data();
+        const pid = String(
+          data.planId || data.planPurchaseId || data.raw?.planId || data.raw?.planPurchaseId || ''
+        ).trim().toLowerCase();
+        const cid = String(data.cusId || data.customerId || '').trim().toLowerCase();
+        return (pid && ids.has(pid)) || (cid && ids.has(cid));
+      })
+      .map((d) => deleteDoc(d.ref));
+
+    // Installments
+    const instSnap = await getDocs(collection(db, 'installments'));
+    const instDeletes = instSnap.docs
+      .filter((d) => {
+        const data = d.data();
+        const pid = String(data.planId || data.planPurchaseId || '').trim().toLowerCase();
+        const cid = String(data.cusId || data.customerId || '').trim().toLowerCase();
+        return (pid && ids.has(pid)) || (cid && ids.has(cid));
+      })
+      .map((d) => deleteDoc(d.ref));
+
+    // CustomerLedger
+    const ledgerSnap = await getDocs(collection(db, 'customerLedger'));
+    const ledgerDeletes = ledgerSnap.docs
+      .filter((d) => {
+        const data = d.data();
+        const pid = String(data.planPurchaseId || data.planId || '').trim().toLowerCase();
+        const cid = String(data.cusId || data.customerId || '').trim().toLowerCase();
+        return (pid && ids.has(pid)) || (cid && ids.has(cid));
+      })
+      .map((d) => deleteDoc(d.ref));
+
+    await Promise.all([...payDeletes, ...instDeletes, ...ledgerDeletes]);
+  } catch (e) {
+    console.warn('Cascade delete linked plan purchase payments warning:', e);
+  }
 }

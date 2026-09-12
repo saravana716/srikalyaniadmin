@@ -378,11 +378,19 @@ const ChitFundPlans = () => {
           <span style={styles.pageInfo}>Showing page {currentPage}/{totalPages}</span>
           <div style={styles.paginationControls} className="pagination-controls">
             <button style={styles.pagBtn} disabled={currentPage === 1} onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}>Previous</button>
-            <button style={{ ...styles.pagBtn, ...(currentPage === 1 ? styles.pagBtnActive : {}) }} onClick={() => setCurrentPage(1)}>1</button>
-            <button style={{ ...styles.pagBtn, ...(currentPage === 2 ? styles.pagBtnActive : {}) }} onClick={() => setCurrentPage(2)}>2</button>
-            <button style={{ ...styles.pagBtn, ...(currentPage === 3 ? styles.pagBtnActive : {}) }} onClick={() => setCurrentPage(3)}>3</button>
-            <button style={styles.pagBtn}>...</button>
-            <button style={styles.pagBtn} disabled={currentPage === totalPages} onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}>Next</button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+              <button
+                key={page}
+                style={{
+                  ...styles.pagBtn,
+                  ...(currentPage === page ? styles.pagBtnActive : {}),
+                }}
+                onClick={() => setCurrentPage(page)}
+              >
+                {page}
+              </button>
+            ))}
+            <button style={styles.pagBtn} disabled={currentPage >= totalPages} onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}>Next</button>
           </div>
         </div>
       </main>

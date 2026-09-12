@@ -116,8 +116,8 @@ function mapLedgerRow(entry) {
     note: entry.note || '',
     ledgerId: entry.id,
     createdAt: entry.createdAt,
-    _canEdit: false,
-    _canDelete: false,
+    _canEdit: true,
+    _canDelete: true,
     _fromLedger: true,
     _collection: LEDGER,
     raw: entry,
@@ -125,7 +125,7 @@ function mapLedgerRow(entry) {
 }
 
 function subscribeCollection(colName, setRows) {
-  if (typeof setRows !== 'function') return () => {};
+  if (typeof setRows !== 'function') return () => { };
   try {
     const plain = collection(db, colName);
     const apply = (snapshot) => {
@@ -159,7 +159,7 @@ function subscribeCollection(colName, setRows) {
   } catch (err) {
     console.warn(`subscribeCollection failed for ${colName}:`, err);
     setRows([]);
-    return () => {};
+    return () => { };
   }
 }
 
@@ -214,9 +214,9 @@ export function subscribeAllPayments(setData) {
   });
 
   return () => {
-    try { if (typeof unsubPayments === 'function') unsubPayments(); } catch (e) {}
-    try { if (typeof unsubInstallments === 'function') unsubInstallments(); } catch (e) {}
-    try { if (typeof unsubLedger === 'function') unsubLedger(); } catch (e) {}
+    try { if (typeof unsubPayments === 'function') unsubPayments(); } catch (e) { }
+    try { if (typeof unsubInstallments === 'function') unsubInstallments(); } catch (e) { }
+    try { if (typeof unsubLedger === 'function') unsubLedger(); } catch (e) { }
   };
 }
 
@@ -383,19 +383,56 @@ export async function deletePayment(id) {
 }
 
 /**
- * Delete from whichever collection the unified row came from.
+ * Delete from whichever collection the unified row came from (payments, installments, or customerLedger).
  */
 export async function deleteUnifiedPayment(row) {
-  if (!row?.id) throw new Error('Missing payment id');
-  if (row._fromLedger || String(row.id).startsWith('ledger_')) {
-    throw new Error('Add Cash history cannot be deleted from Payment. Manage it from Customers.');
+  if (!row) throw new Error('Missing payment entry');
+  
+  const rawId = row.id || row.raw?.id;
+  if (!rawId) throw new Error('Missing payment id');
+
+  const cleanId = String(rawId).replace(/^ledger_/, '');
+  const ledgerId = row.ledgerId || row.raw?.ledgerId || (String(rawId).startsWith('ledger_') ? cleanId : null);
+  const col = row._collection || (String(rawId).startsWith('ledger_') ? LEDGER : COLLECTION);
+
+  const deletePromises = [];
+
+  // 1. Delete from customerLedger if it has a ledgerId or came from customerLedger
+  if (ledgerId || col === LEDGER || row._fromLedger || row.source === 'customer_cash') {
+    const targetLedgerId = ledgerId || cleanId;
+    if (targetLedgerId) {
+      deletePromises.push(deleteDoc(doc(db, LEDGER, targetLedgerId)).catch(() => {}));
+    }
   }
-  const col = row._collection || COLLECTION;
-  if (col === INSTALLMENTS) {
-    await deleteDoc(doc(db, INSTALLMENTS, row.id));
-    return;
+
+  // 2. Delete from installments if it came from installments or has a linked ledgerId
+  if (col === INSTALLMENTS || row.source === 'installment' || row.source === 'customer_cash' || ledgerId) {
+    if (col === INSTALLMENTS || (!String(rawId).startsWith('ledger_') && row.source !== 'payment')) {
+      deletePromises.push(deleteDoc(doc(db, INSTALLMENTS, cleanId)).catch(() => {}));
+    }
+    if (ledgerId) {
+      try {
+        const instSnap = await getDocs(query(collection(db, INSTALLMENTS), where('ledgerId', '==', ledgerId)));
+        instSnap.docs.forEach((d) => {
+          deletePromises.push(deleteDoc(d.ref).catch(() => {}));
+        });
+      } catch (e) {
+        console.warn('Find linked installment error:', e);
+      }
+    }
   }
-  await deleteDoc(doc(db, COLLECTION, row.id));
+
+  // 3. Delete from payments collection if it came from payments
+  if (col === COLLECTION || row.source === 'payment') {
+    deletePromises.push(deleteDoc(doc(db, COLLECTION, cleanId)).catch(() => {}));
+  }
+
+  // Fallback if empty
+  if (deletePromises.length === 0) {
+    deletePromises.push(deleteDoc(doc(db, col, cleanId)).catch(() => {}));
+  }
+
+  await Promise.all(deletePromises);
 }
 
 /**
