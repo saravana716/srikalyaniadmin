@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import ActionMenu from '../components/ActionMenu';
 import Button from '../components/Button';
@@ -198,6 +199,7 @@ const PaymentViewModal = ({ payment, onClose, onSplit }) => {
 };
 
 const Payment = () => {
+  const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [openActionId, setOpenActionId] = useState(null);
@@ -522,7 +524,13 @@ const Payment = () => {
             </button>
             <div style={styles.headerIcons}>
               <button style={styles.iconButton}><FiSettings /></button>
-              <button style={styles.iconButton}>
+              <button
+                type="button"
+                style={styles.iconButton}
+                onClick={() => navigate('/notifications')}
+                aria-label="Notifications"
+                title="Notifications"
+              >
                 <span style={styles.notifBadge}>1</span>
                 <FiBell />
               </button>
