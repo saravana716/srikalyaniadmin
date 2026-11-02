@@ -4,7 +4,7 @@ import ActionMenu from '../components/ActionMenu';
 import Button from '../components/Button';
 import { FiSettings, FiBell, FiMenu, FiX, FiSearch, FiLayers, FiCheckCircle, FiDollarSign, FiPlusCircle, FiTrash2 } from 'react-icons/fi';
 import { GiGoldBar } from 'react-icons/gi';
-import { MdKeyboardArrowUp, MdKeyboardArrowDown } from 'react-icons/md';
+import { MdKeyboardArrowUp, MdKeyboardArrowDown, MdSwapHoriz } from 'react-icons/md';
 import {
   subscribePlanPurchases,
   addPlanPurchase as addPlanPurchaseToDb,
@@ -16,6 +16,7 @@ import {
 import { subscribeCustomers } from '../services/customersService';
 import { subscribePlans } from '../services/plansService';
 import PlanPurchaseDetailModal from '../components/PlanPurchaseDetailModal';
+import EditPlanPurchaseModal from '../components/EditPlanPurchaseModal';
 import CloseAccountModal from '../components/CloseAccountModal';
 import CancelChitModal from '../components/CancelChitModal';
 import CustomerPaymentHistoryModal from '../components/CustomerPaymentHistoryModal';
@@ -30,181 +31,6 @@ const MAROON = '#801A39';
 const LIGHT_GRAY = '#F0F0F0';
 const BORDER_GRAY = '#e0e0e0';
 
-const AddEditPlanPurchaseModal = ({ planPurchase, onClose, onSave, error, customers, plans, saving }) => {
-  const isEdit = !!planPurchase;
-  const [customerId, setCustomerId] = useState(planPurchase?.customerId ?? '');
-  const [cusId, setCusId] = useState(planPurchase?.cusId ?? '');
-  const [customerName, setCustomerName] = useState(planPurchase?.customerName ?? planPurchase?.name ?? '');
-  const [mobile, setMobile] = useState(planPurchase?.mobile ?? '');
-  const [planId, setPlanId] = useState(planPurchase?.planId ?? '');
-  const [planName, setPlanName] = useState(planPurchase?.planName ?? '');
-  const [planType, setPlanType] = useState(planPurchase?.plan || 'Monthly');
-  const [amount, setAmount] = useState(planPurchase?.amount ? String(planPurchase.amount) : '1000');
-  const [durationMonths, setDurationMonths] = useState(planPurchase?.durationMonths ? String(planPurchase.durationMonths) : '11');
-  const [nomineeName, setNomineeName] = useState(planPurchase?.nomineeName ?? '');
-  const [startDate, setStartDate] = useState(planPurchase?.startDate ?? new Date().toISOString().split('T')[0]);
-  const [status, setStatus] = useState(planPurchase?.status ?? 'Active');
-
-  const handleCustomerChange = (e) => {
-    const val = e.target.value;
-    if (!val) {
-      setCustomerId('');
-      setCusId('');
-      setCustomerName('');
-      setMobile('');
-      return;
-    }
-    const selected = customers.find(c => c.id === val || c.cusId === val);
-    if (selected) {
-      setCustomerId(selected.id || selected.cusId);
-      setCusId(selected.cusId || '');
-      setCustomerName(selected.name || '');
-      setMobile(selected.mobile || '');
-    }
-  };
-
-  const handlePlanChange = (e) => {
-    const val = e.target.value;
-    if (!val) {
-      setPlanId('');
-      setPlanName('');
-      return;
-    }
-    const selected = plans.find(p => p.id === val);
-    if (selected) {
-      setPlanId(selected.id);
-      setPlanName(selected.name || selected.planName);
-      setPlanType(selected.type || selected.plan || 'Monthly');
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (saving) return;
-    await onSave(
-      {
-        customerId,
-        cusId,
-        customerName,
-        name: customerName,
-        mobile,
-        planId,
-        planName,
-        plan: planType,
-        amount: Number(amount) || 0,
-        durationMonths: Number(durationMonths) || 11,
-        nomineeName,
-        startDate,
-        status,
-      },
-      planPurchase?.id
-    );
-  };
-
-  return (
-    <div style={styles.modalOverlay} onClick={onClose}>
-      <div style={styles.modalBox} onClick={(e) => e.stopPropagation()}>
-        <div style={styles.modalHeader}>
-          <h2 style={styles.modalTitle}>{isEdit ? 'Edit Chit Enrollment' : 'Enroll in Chit / Gold Scheme'}</h2>
-          <button type="button" style={styles.modalClose} onClick={onClose} aria-label="Close">
-            <FiX size={24} />
-          </button>
-        </div>
-        <form onSubmit={handleSubmit} style={{ padding: '24px' }}>
-          {error && <p style={{ color: '#dc2626', marginBottom: 12, fontSize: 14 }}>{error}</p>}
-          <div style={styles.formGroup}>
-            <label style={styles.formLabel}>Customer <span style={{ color: '#dc2626' }}>*</span></label>
-            <select 
-              value={customerId} 
-              onChange={handleCustomerChange} 
-              style={styles.formSelect} 
-              required
-            >
-              <option value="">Select a Customer</option>
-              {customers.map(c => (
-                <option key={c.id} value={c.id || c.cusId}>
-                  {c.name} ({c.cusId || 'No ID'}) {c.mobile ? `• ${c.mobile}` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div style={styles.formGroup}>
-            <label style={styles.formLabel}>Chit / Gold Scheme <span style={{ color: '#dc2626' }}>*</span></label>
-            <select 
-              value={planId} 
-              onChange={handlePlanChange} 
-              style={styles.formSelect} 
-              required
-            >
-              <option value="">Select a Scheme</option>
-              {plans.map(p => (
-                <option key={p.id} value={p.id}>
-                  {p.name || p.planName} ({p.type || 'Monthly'})
-                </option>
-              ))}
-            </select>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <div style={styles.formGroup}>
-              <label style={styles.formLabel}>Monthly Installment (₹)</label>
-              <input
-                type="number"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                style={styles.formInput}
-                placeholder="1000"
-                required
-              />
-            </div>
-            <div style={styles.formGroup}>
-              <label style={styles.formLabel}>Duration (Months)</label>
-              <input
-                type="number"
-                value={durationMonths}
-                onChange={(e) => setDurationMonths(e.target.value)}
-                style={styles.formInput}
-                placeholder="11"
-                required
-              />
-            </div>
-          </div>
-          <div style={styles.formGroup}>
-            <label style={styles.formLabel}>Nominee Name (Optional)</label>
-            <input
-              type="text"
-              value={nomineeName}
-              onChange={(e) => setNomineeName(e.target.value)}
-              style={styles.formInput}
-              placeholder="e.g. Spouse / Sibling"
-            />
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <div style={styles.formGroup}>
-              <label style={styles.formLabel}>Enrollment Start Date</label>
-              <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={styles.formInput} required />
-            </div>
-            <div style={styles.formGroup}>
-              <label style={styles.formLabel}>Status</label>
-              <select value={status} onChange={(e) => setStatus(e.target.value)} style={styles.formSelect}>
-                <option value="Active">Active</option>
-                <option value="Inactive">Inactive</option>
-                <option value="Completed">Completed</option>
-                <option value="Closed">Closed</option>
-                <option value="Cancelled">Cancelled</option>
-              </select>
-            </div>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 20 }}>
-            <Button type="button" variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button>
-            <Button type="submit" loading={saving} loadingText={isEdit ? 'Updating…' : 'Enrolling…'}>
-              {isEdit ? 'Update Enrollment' : 'Enroll Customer'}
-            </Button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};
 
 const PlanPurchases = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -451,8 +277,12 @@ const PlanPurchases = () => {
     }
   };
 
-  const handleEdit = (row) => {
-    setEditingRow(row);
+  const handleEdit = (row, targetPayment = null) => {
+    if (targetPayment) {
+      setEditingRow({ ...row, _targetPayment: targetPayment });
+    } else {
+      setEditingRow(row);
+    }
     setShowAddModal(false);
     setOpenActionId(null);
     setOpenCardActionId(null);
@@ -579,6 +409,7 @@ const PlanPurchases = () => {
           onCloseAccount={() => openCloseAccount(viewModalRow)}
           onCancelChit={() => openCancelChit(viewModalRow)}
           onOpenPaymentHistory={(row) => { setViewModalRow(null); setHistoryRow(row); }}
+          onEditPlan={(row, targetPayment) => { setViewModalRow(null); handleEdit(row, targetPayment); }}
         />
       )}
       {historyRow && (
@@ -633,24 +464,23 @@ const PlanPurchases = () => {
       )}
 
       {showAddModal && (
-        <AddEditPlanPurchaseModal
-          onClose={() => { if (!saving) { setShowAddModal(false); setSaveError(null); } }}
-          onSave={handleSave}
-          error={saveError}
+        <EditPlanPurchaseModal
+          onClose={() => setShowAddModal(false)}
+          onSuccess={() => setShowAddModal(false)}
           customers={customers}
           plans={plans}
-          saving={saving}
+          initialMode="details"
         />
       )}
       {editingRow && (
-        <AddEditPlanPurchaseModal
+        <EditPlanPurchaseModal
           planPurchase={editingRow}
-          onClose={() => { if (!saving) { setEditingRow(null); setSaveError(null); } }}
-          onSave={handleSave}
-          error={saveError}
+          initialTargetPayment={editingRow?._targetPayment}
+          onClose={() => setEditingRow(null)}
+          onSuccess={() => setEditingRow(null)}
           customers={customers}
           plans={plans}
-          saving={saving}
+          initialMode="split"
         />
       )}
 
@@ -819,50 +649,60 @@ const PlanPurchases = () => {
           onClose={() => { setOpenActionId(null); setActionAnchorEl(null); }}
           anchorEl={actionAnchorEl}
           busy={deleting || closing || cancelling}
-          onView={() => { const row = list.find((r) => r.id === openActionId); if (row) handleView(row); }}
+          onView={() => { const row = effectiveList.find((r) => r.id === openActionId); if (row) handleView(row); }}
           onPayInstallment={
-            ['closed', 'cancelled'].includes(String(list.find((r) => r.id === openActionId)?.status || '').toLowerCase())
+            ['closed', 'cancelled'].includes(String(effectiveList.find((r) => r.id === openActionId)?.status || '').toLowerCase())
               ? null
-              : () => { const row = list.find((r) => r.id === openActionId); if (row) handlePayInstallment(row); }
+              : () => { const row = effectiveList.find((r) => r.id === openActionId); if (row) handlePayInstallment(row); }
           }
-          onPaymentHistory={() => { const row = list.find((r) => r.id === openActionId); if (row) handlePaymentHistory(row); }}
-          onEdit={() => { const row = list.find((r) => r.id === openActionId); if (row) handleEdit(row); }}
-          onCloseAccount={
-            ['closed', 'cancelled'].includes(String(list.find((r) => r.id === openActionId)?.status || '').toLowerCase())
+          onPaymentHistory={() => { const row = effectiveList.find((r) => r.id === openActionId); if (row) handlePaymentHistory(row); }}
+          onSplitInstallments={
+            ['closed', 'cancelled'].includes(String(effectiveList.find((r) => r.id === openActionId)?.status || '').toLowerCase())
               ? null
-              : () => { const row = list.find((r) => r.id === openActionId); if (row) openCloseAccount(row); }
+              : () => { const row = effectiveList.find((r) => r.id === openActionId); if (row) handleEdit(row); }
+          }
+          onEdit={() => { const row = effectiveList.find((r) => r.id === openActionId); if (row) handleEdit(row); }}
+          onCloseAccount={
+            ['closed', 'cancelled'].includes(String(effectiveList.find((r) => r.id === openActionId)?.status || '').toLowerCase())
+              ? null
+              : () => { const row = effectiveList.find((r) => r.id === openActionId); if (row) openCloseAccount(row); }
           }
           onCancelChit={
-            ['closed', 'cancelled'].includes(String(list.find((r) => r.id === openActionId)?.status || '').toLowerCase())
+            ['closed', 'cancelled'].includes(String(effectiveList.find((r) => r.id === openActionId)?.status || '').toLowerCase())
               ? null
-              : () => { const row = list.find((r) => r.id === openActionId); if (row) openCancelChit(row); }
+              : () => { const row = effectiveList.find((r) => r.id === openActionId); if (row) openCancelChit(row); }
           }
-          onDelete={() => { const row = list.find((r) => r.id === openActionId); if (row) return handleDelete(row); }}
+          onDelete={() => { const row = effectiveList.find((r) => r.id === openActionId); if (row) return handleDelete(row); }}
         />
         <ActionMenu
           isOpen={!!openCardActionId}
           onClose={() => { setOpenCardActionId(null); setCardActionAnchorEl(null); }}
           anchorEl={cardActionAnchorEl}
           busy={deleting || closing || cancelling}
-          onView={() => { const row = list.find((r) => r.id === openCardActionId); if (row) handleView(row); }}
+          onView={() => { const row = effectiveList.find((r) => r.id === openCardActionId); if (row) handleView(row); }}
           onPayInstallment={
-            ['closed', 'cancelled'].includes(String(list.find((r) => r.id === openCardActionId)?.status || '').toLowerCase())
+            ['closed', 'cancelled'].includes(String(effectiveList.find((r) => r.id === openCardActionId)?.status || '').toLowerCase())
               ? null
-              : () => { const row = list.find((r) => r.id === openCardActionId); if (row) handlePayInstallment(row); }
+              : () => { const row = effectiveList.find((r) => r.id === openCardActionId); if (row) handlePayInstallment(row); }
           }
-          onPaymentHistory={() => { const row = list.find((r) => r.id === openCardActionId); if (row) handlePaymentHistory(row); }}
-          onEdit={() => { const row = list.find((r) => r.id === openCardActionId); if (row) handleEdit(row); }}
-          onCloseAccount={
-            ['closed', 'cancelled'].includes(String(list.find((r) => r.id === openCardActionId)?.status || '').toLowerCase())
+          onPaymentHistory={() => { const row = effectiveList.find((r) => r.id === openCardActionId); if (row) handlePaymentHistory(row); }}
+          onSplitInstallments={
+            ['closed', 'cancelled'].includes(String(effectiveList.find((r) => r.id === openCardActionId)?.status || '').toLowerCase())
               ? null
-              : () => { const row = list.find((r) => r.id === openCardActionId); if (row) openCloseAccount(row); }
+              : () => { const row = effectiveList.find((r) => r.id === openCardActionId); if (row) handleEdit(row); }
+          }
+          onEdit={() => { const row = effectiveList.find((r) => r.id === openCardActionId); if (row) handleEdit(row); }}
+          onCloseAccount={
+            ['closed', 'cancelled'].includes(String(effectiveList.find((r) => r.id === openCardActionId)?.status || '').toLowerCase())
+              ? null
+              : () => { const row = effectiveList.find((r) => r.id === openCardActionId); if (row) openCloseAccount(row); }
           }
           onCancelChit={
-            ['closed', 'cancelled'].includes(String(list.find((r) => r.id === openCardActionId)?.status || '').toLowerCase())
+            ['closed', 'cancelled'].includes(String(effectiveList.find((r) => r.id === openCardActionId)?.status || '').toLowerCase())
               ? null
-              : () => { const row = list.find((r) => r.id === openCardActionId); if (row) openCancelChit(row); }
+              : () => { const row = effectiveList.find((r) => r.id === openCardActionId); if (row) openCancelChit(row); }
           }
-          onDelete={() => { const row = list.find((r) => r.id === openCardActionId); if (row) return handleDelete(row); }}
+          onDelete={() => { const row = effectiveList.find((r) => r.id === openCardActionId); if (row) return handleDelete(row); }}
         />
 
         <div style={styles.tableWrap} className="plan-purchases-table-wrap">
@@ -927,14 +767,35 @@ const PlanPurchases = () => {
                     </div>
                   </td>
                   <td style={styles.td}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                      <strong style={{ fontSize: '13px', color: '#1e293b' }}>
-                        {row.planName || 'Gold Scheme'}
-                      </strong>
-                      <div style={{ fontSize: '12px', color: '#64748b' }}>
-                        Installment: <strong style={{ color: '#334155' }}>{formatINR(row.amount || 0)}</strong>/mo
-                      </div>
-                    </div>
+                    {(() => {
+                      const isDaily = String(row.plan || row.planType || '').toLowerCase().includes('daily');
+                      const instAmt = row.dailyAmount || row.installmentAmount || row.amount || 0;
+                      return (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <strong style={{ fontSize: '13px', color: '#1e293b' }}>
+                              {row.planName || (isDaily ? 'Daily Gold Scheme' : 'Gold Chit Scheme')}
+                            </strong>
+                            <span
+                              style={{
+                                fontSize: '10.5px',
+                                fontWeight: 700,
+                                padding: '1px 6px',
+                                borderRadius: '4px',
+                                backgroundColor: isDaily ? '#fef3c7' : '#e0e7ff',
+                                color: isDaily ? '#b45309' : '#3730a3',
+                              }}
+                            >
+                              {isDaily ? 'Daily' : 'Monthly'}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#64748b' }}>
+                            Installment: <strong style={{ color: '#334155' }}>{formatINR(instAmt)}</strong>
+                            {isDaily ? '/day' : '/mo'}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </td>
                   <td style={styles.td}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
@@ -952,7 +813,10 @@ const PlanPurchases = () => {
                   </td>
                   <td style={styles.td}>
                     <span style={styles.installmentPill}>
-                      {row.paidInstallments ?? 0} / {row.durationMonths || 11}
+                      {row.paidInstallments ?? 0}{' '}
+                      {String(row.plan || row.planType || '').toLowerCase().includes('daily')
+                        ? 'days'
+                        : `/ ${row.durationMonths || 11} mo`}
                     </span>
                   </td>
                   <td style={styles.td}>
@@ -964,16 +828,26 @@ const PlanPurchases = () => {
                     }>{row.status || 'Active'}</span>
                   </td>
                   <td style={{ ...styles.tdAction, textAlign: 'right' }}>
-                    <div style={{ ...styles.actionCellWrap, justifyContent: 'flex-end' }}>
+                    <div style={{ ...styles.actionCellWrap, justifyContent: 'flex-end', gap: '6px' }}>
                       {!['closed', 'cancelled'].includes(String(row.status || '').toLowerCase()) ? (
-                        <button
-                          type="button"
-                          style={styles.quickPayBtn}
-                          onClick={() => handlePayInstallment(row)}
-                          title="Record Installment Payment"
-                        >
-                          + Pay
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            style={styles.quickSplitBtn}
+                            onClick={() => handleEdit(row)}
+                            title="Plan Change & Split Installments"
+                          >
+                            ⚡ Split
+                          </button>
+                          <button
+                            type="button"
+                            style={styles.quickPayBtn}
+                            onClick={() => handlePayInstallment(row)}
+                            title="Record Installment Payment"
+                          >
+                            + Pay
+                          </button>
+                        </>
                       ) : (
                         <span style={{ fontSize: '11.5px', color: '#6b7280', fontWeight: 600, padding: '4px 6px' }}>
                           {row.status}
@@ -1197,6 +1071,20 @@ const styles = {
     fontWeight: '600',
     cursor: 'pointer',
     marginRight: '6px',
+  },
+  quickSplitBtn: {
+    padding: '4px 9px',
+    borderRadius: '6px',
+    border: '1px solid #bae6fd',
+    backgroundColor: '#e0f2fe',
+    color: '#0369a1',
+    fontSize: '12px',
+    fontWeight: '600',
+    cursor: 'pointer',
+    marginRight: '4px',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '3px',
   },
   tdAction: { padding: '12px 16px', fontSize: '13px', position: 'relative', verticalAlign: 'middle' },
   actionCellWrap: { position: 'relative', display: 'inline-flex', alignItems: 'center', gap: '4px' },

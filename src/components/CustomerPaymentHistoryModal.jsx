@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { FiX, FiSearch, FiCreditCard, FiDollarSign, FiClock, FiCheckCircle, FiLayers, FiCalendar, FiTrash2 } from 'react-icons/fi';
 import Button from './Button';
+import EditPlanPurchaseModal from './EditPlanPurchaseModal';
 import { subscribeCustomerAllPayments, subscribeCustomerPlans } from '../services/customersService';
 import { deleteUnifiedPayment } from '../services/paymentsService';
 import { formatINR } from '../utils/currencyUtils';
@@ -24,6 +25,7 @@ const CustomerPaymentHistoryModal = ({ customer, initialPlan = 'all', onClose, o
   const [selectedPlanKey, setSelectedPlanKey] = useState('all');
   const [filterSource, setFilterSource] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [splitModalTarget, setSplitModalTarget] = useState(null);
 
   // Set initial plan if specified
   useEffect(() => {
@@ -62,12 +64,21 @@ const CustomerPaymentHistoryModal = ({ customer, initialPlan = 'all', onClose, o
     customerPlans.forEach((p) => {
       const name = (p.planName || p.name || 'Scheme Plan').trim();
       const norm = normalizePlanName(name);
-      if (!norm) return;
-      map.set(norm, {
-        id: p.id,
+      const planType = p.plan || p.planType || p.type || customer?.plan || 'Monthly';
+      // Use document ID as primary key so multiple plans with identical/similar names don't collide
+      const key = p.id || `${norm}_${planType.toLowerCase()}`;
+      if (!key) return;
+
+      const typeLabel = planType === 'Daily' ? 'Daily' : 'Monthly';
+      const displayName = customerPlans.length > 1 ? `${name} (${typeLabel})` : name;
+
+      map.set(key, {
+        id: p.id || key,
+        key: key,
         normKey: norm,
-        name,
-        planType: p.plan || p.type || customer?.plan || 'Monthly',
+        name: displayName,
+        rawName: name,
+        planType: planType,
         status: p.status || 'Active',
         savedAmount: p.savedAmount ?? p.amount ?? 0,
         paidInstallments: p.paidInstallments ?? 0,
@@ -75,16 +86,20 @@ const CustomerPaymentHistoryModal = ({ customer, initialPlan = 'all', onClose, o
       });
     });
 
-    // 2. From payment records (if any payment has a plan name not in planPurchases)
+    // 2. From payment records (if any payment has a plan name or id not in planPurchases)
     payments.forEach((pay) => {
+      const pid = pay.planId || pay.planPurchaseId;
       const payPlan = (pay.chitPlan || pay.planName || '').trim();
       const norm = normalizePlanName(payPlan);
-      if (norm && !map.has(norm)) {
-        map.set(norm, {
-          id: pay.planId || pay.planPurchaseId || norm,
+      const key = pid || norm;
+      if (key && !map.has(key)) {
+        map.set(key, {
+          id: pid || norm,
+          key: key,
           normKey: norm,
-          name: payPlan,
-          planType: customer?.plan || 'Monthly',
+          name: payPlan || 'Scheme Payment',
+          rawName: payPlan,
+          planType: pay.planType || customer?.plan || 'Monthly',
           status: 'Active',
           savedAmount: 0,
           paidInstallments: 0,
@@ -98,8 +113,10 @@ const CustomerPaymentHistoryModal = ({ customer, initialPlan = 'all', onClose, o
       const norm = normalizePlanName(customer.plan);
       map.set(norm, {
         id: norm,
+        key: norm,
         normKey: norm,
         name: `${customer.plan} Plan`,
+        rawName: customer.plan,
         planType: customer.plan,
         status: 'Active',
         savedAmount: customer.accountBalance ?? customer.amount ?? 0,
@@ -111,9 +128,9 @@ const CustomerPaymentHistoryModal = ({ customer, initialPlan = 'all', onClose, o
     // Convert map to array and calculate per-plan payment totals
     const list = Array.from(map.values()).map((p) => {
       const planPayments = payments.filter((item) => {
-        const itemPlan = normalizePlanName(item.chitPlan || item.planName);
-        if (itemPlan && itemPlan === p.normKey) return true;
         if (p.id && (item.planId === p.id || item.planPurchaseId === p.id)) return true;
+        const itemPlan = normalizePlanName(item.chitPlan || item.planName);
+        if (itemPlan && (itemPlan === p.normKey || itemPlan === normalizePlanName(p.rawName))) return true;
         return false;
       });
 
@@ -139,25 +156,25 @@ const CustomerPaymentHistoryModal = ({ customer, initialPlan = 'all', onClose, o
       return;
     }
     const norm = normalizePlanName(initialPlan);
-    const found = availablePlans.find((p) => p.normKey === norm || p.id === initialPlan || p.name.toLowerCase() === initialPlan.toLowerCase());
+    const found = availablePlans.find((p) => p.id === initialPlan || p.key === initialPlan || p.normKey === norm || p.name.toLowerCase() === initialPlan.toLowerCase());
     if (found) {
-      setSelectedPlanKey(found.normKey);
+      setSelectedPlanKey(found.key || found.id);
     }
   }, [initialPlan, availablePlans]);
 
   // Selected plan object (or null for all)
   const activePlan = useMemo(() => {
     if (selectedPlanKey === 'all') return null;
-    return availablePlans.find((p) => p.normKey === selectedPlanKey || p.id === selectedPlanKey) || null;
+    return availablePlans.find((p) => p.key === selectedPlanKey || p.id === selectedPlanKey || p.normKey === selectedPlanKey) || null;
   }, [selectedPlanKey, availablePlans]);
 
   // Filter payments by selected plan
   const planFilteredPayments = useMemo(() => {
     if (!activePlan) return payments;
     return payments.filter((item) => {
-      const itemPlan = normalizePlanName(item.chitPlan || item.planName);
-      if (itemPlan && itemPlan === activePlan.normKey) return true;
       if (activePlan.id && (item.planId === activePlan.id || item.planPurchaseId === activePlan.id)) return true;
+      const itemPlan = normalizePlanName(item.chitPlan || item.planName);
+      if (itemPlan && (itemPlan === activePlan.normKey || itemPlan === normalizePlanName(activePlan.rawName))) return true;
       return false;
     });
   }, [payments, activePlan]);
@@ -168,7 +185,13 @@ const CustomerPaymentHistoryModal = ({ customer, initialPlan = 'all', onClose, o
     return planFilteredPayments.filter((item) => {
       if (filterSource !== 'all') {
         if (filterSource === 'cash' && item.source !== 'customer_cash') return false;
-        if (filterSource === 'installment' && item.source !== 'installment') return false;
+        if (
+          filterSource === 'installment' &&
+          item.source !== 'installment' &&
+          item.source !== 'daily_split' &&
+          item.source !== 'monthly_split'
+        )
+          return false;
         if (filterSource === 'payment' && item.source !== 'payment') return false;
       }
       if (q) {
@@ -216,6 +239,45 @@ const CustomerPaymentHistoryModal = ({ customer, initialPlan = 'all', onClose, o
     };
   }, [planFilteredPayments, activePlan, customer]);
 
+  const handleSplitPayment = (item) => {
+    const pid = item.planId || item.planPurchaseId;
+    const foundPlan =
+      customerPlans.find((p) => p.id === pid) ||
+      activePlan?.planPurchase ||
+      customerPlans[0] || {
+        id: pid || customer?.id,
+        customerId: customer?.id,
+        cusId: customer?.cusId,
+        customerName: customer?.name,
+        name: customer?.name,
+        mobile: customer?.mobile,
+        planName: item.chitPlan || item.planName || customer?.planName || customer?.plan || 'Daily Gold Saving Plan',
+        plan: customer?.plan || 'Daily',
+        planType: customer?.plan || 'Daily',
+        savedAmount: customer?.accountBalance ?? customer?.amount ?? 0,
+      };
+
+    setSplitModalTarget({ plan: foundPlan, payment: item });
+  };
+
+  const handleOpenPlanSplit = () => {
+    const targetPlan =
+      activePlan?.planPurchase ||
+      customerPlans[0] || {
+        id: customer?.id,
+        customerId: customer?.id,
+        cusId: customer?.cusId,
+        customerName: customer?.name,
+        name: customer?.name,
+        mobile: customer?.mobile,
+        planName: customer?.planName || customer?.plan || 'Daily Gold Saving Plan',
+        plan: customer?.plan || 'Daily',
+        planType: customer?.plan || 'Daily',
+        savedAmount: customer?.accountBalance ?? customer?.amount ?? 0,
+      };
+    setSplitModalTarget({ plan: targetPlan, payment: null });
+  };
+
   if (!customer) return null;
 
   return (
@@ -234,9 +296,32 @@ const CustomerPaymentHistoryModal = ({ customer, initialPlan = 'all', onClose, o
               {customer.plan ? ` · Primary Plan: ${customer.plan}` : ''}
             </p>
           </div>
-          <button type="button" style={styles.modalClose} onClick={onClose} aria-label="Close">
-            <FiX size={24} />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <button
+              type="button"
+              onClick={handleOpenPlanSplit}
+              style={{
+                padding: '6px 14px',
+                fontSize: '12.5px',
+                fontWeight: '600',
+                color: '#0369a1',
+                backgroundColor: '#e0f2fe',
+                border: '1px solid #bae6fd',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                transition: 'all 0.15s ease',
+              }}
+              title="Change plan frequency or split installments"
+            >
+              ⚡ Plan Change & Split
+            </button>
+            <button type="button" style={styles.modalClose} onClick={onClose} aria-label="Close">
+              <FiX size={24} />
+            </button>
+          </div>
         </div>
 
         {/* Plan Selector Section */}
@@ -263,16 +348,17 @@ const CustomerPaymentHistoryModal = ({ customer, initialPlan = 'all', onClose, o
             </button>
 
             {availablePlans.map((p) => {
-              const isActive = selectedPlanKey === p.normKey || selectedPlanKey === p.id;
+              const chipKey = p.key || p.id;
+              const isActive = selectedPlanKey === chipKey || selectedPlanKey === p.id || selectedPlanKey === p.normKey;
               return (
                 <button
-                  key={p.normKey}
+                  key={chipKey}
                   type="button"
                   style={{
                     ...styles.planChip,
                     ...(isActive ? styles.planChipActive : {}),
                   }}
-                  onClick={() => setSelectedPlanKey(p.normKey)}
+                  onClick={() => setSelectedPlanKey(chipKey)}
                 >
                   <div style={styles.planChipTopRow}>
                     <span style={styles.planChipTitle}>{p.name}</span>
@@ -424,7 +510,11 @@ const CustomerPaymentHistoryModal = ({ customer, initialPlan = 'all', onClose, o
                 <tbody>
                   {filteredPayments.map((item) => {
                     const isCash = item.source === 'customer_cash';
-                    const isInstallment = item.source === 'installment';
+                    const isInstallment =
+                      item.source === 'installment' ||
+                      item.source === 'daily_split' ||
+                      item.source === 'monthly_split';
+                    const isDailySplit = item.source === 'daily_split';
                     const statusClass =
                       item.status === 'Completed' || item.status === 'Paid'
                         ? styles.statusCompleted
@@ -446,15 +536,31 @@ const CustomerPaymentHistoryModal = ({ customer, initialPlan = 'all', onClose, o
                           <span style={styles.dateText}>{formatPaymentTime(item)}</span>
                         </td>
                         <td style={styles.td}>
-                          <span
-                            style={{
-                              ...styles.badgeSource,
-                              backgroundColor: isCash ? '#fef3c7' : isInstallment ? '#e0e7ff' : '#f3e8ff',
-                              color: isCash ? '#92400e' : isInstallment ? '#3730a3' : '#6b21a8',
-                            }}
-                          >
-                            {item.sourceLabel || (isCash ? 'Add Cash' : isInstallment ? 'Installment' : 'Payment')}
-                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <span
+                              style={{
+                                ...styles.badgeSource,
+                                backgroundColor: isCash ? '#fef3c7' : isDailySplit ? '#fef3c7' : isInstallment ? '#e0e7ff' : '#f3e8ff',
+                                color: isCash ? '#92400e' : isDailySplit ? '#b45309' : isInstallment ? '#3730a3' : '#6b21a8',
+                              }}
+                            >
+                              {item.sourceLabel || (isCash ? 'Add Cash' : isInstallment ? 'Installment' : 'Payment')}
+                            </span>
+                            {item.installmentNo && (
+                              <span
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  color: '#374151',
+                                  backgroundColor: '#f3f4f6',
+                                  padding: '1px 5px',
+                                  borderRadius: 4,
+                                }}
+                              >
+                                #{item.installmentNo}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td style={styles.td}>
                           <strong style={{ color: '#16a34a', fontSize: 14 }}>
@@ -476,26 +582,49 @@ const CustomerPaymentHistoryModal = ({ customer, initialPlan = 'all', onClose, o
                           <span style={styles.noteText}>{item.note || '—'}</span>
                         </td>
                         <td style={styles.td}>
-                          <button
-                            type="button"
-                            onClick={() => handleDeletePayment(item)}
-                            style={{
-                              background: 'none',
-                              border: 'none',
-                              color: '#dc2626',
-                              cursor: 'pointer',
-                              padding: '4px 8px',
-                              borderRadius: '4px',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                              fontSize: '12px',
-                              fontWeight: '600',
-                            }}
-                            title="Delete Payment Record"
-                          >
-                            <FiTrash2 size={14} /> Delete
-                          </button>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-start' }}>
+                            <button
+                              type="button"
+                              onClick={() => handleSplitPayment(item)}
+                              style={{
+                                backgroundColor: '#e0f2fe',
+                                border: '1px solid #bae6fd',
+                                color: '#0369a1',
+                                cursor: 'pointer',
+                                padding: '4px 9px',
+                                borderRadius: '5px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                                fontSize: '11.5px',
+                                fontWeight: '600',
+                                transition: 'all 0.15s ease',
+                              }}
+                              title="Split this payment into consecutive daily/monthly installments"
+                            >
+                              ⚡ Split
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeletePayment(item)}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                color: '#dc2626',
+                                cursor: 'pointer',
+                                padding: '4px 6px',
+                                borderRadius: '4px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                                fontSize: '11.5px',
+                                fontWeight: '600',
+                              }}
+                              title="Delete Payment Record"
+                            >
+                              <FiTrash2 size={13} /> Delete
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -536,6 +665,17 @@ const CustomerPaymentHistoryModal = ({ customer, initialPlan = 'all', onClose, o
             )}
           </div>
         </div>
+
+        {/* Plan Change & Split Modal */}
+        {splitModalTarget && (
+          <EditPlanPurchaseModal
+            planPurchase={splitModalTarget.plan}
+            initialTargetPayment={splitModalTarget.payment}
+            initialMode="split"
+            onClose={() => setSplitModalTarget(null)}
+            onSuccess={() => setSplitModalTarget(null)}
+          />
+        )}
       </div>
     </div>
   );

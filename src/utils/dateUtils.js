@@ -46,6 +46,71 @@ export function formatToIST(dateStr) {
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 /**
+ * Convert any date input (ISO string, "DD MMM YYYY, hh:mm A", "DD-MM-YYYY", Timestamp, Date)
+ * to a standard "YYYY-MM-DD" string for HTML <input type="date" />.
+ * @param {any} input
+ * @returns {string} "YYYY-MM-DD"
+ */
+export function toISODateString(input) {
+  if (!input) return new Date().toISOString().slice(0, 10);
+  if (typeof input?.toDate === 'function') {
+    const d = input.toDate();
+    if (!Number.isNaN(d.getTime())) return formatDateToISTDateOnly(d);
+  }
+  if (input?.seconds != null && typeof input.seconds === 'number') {
+    const d = new Date(input.seconds * 1000);
+    if (!Number.isNaN(d.getTime())) return formatDateToISTDateOnly(d);
+  }
+  if (input instanceof Date) {
+    if (!Number.isNaN(input.getTime())) return formatDateToISTDateOnly(input);
+  }
+  if (typeof input === 'string') {
+    const s = input.trim();
+    if (!s || s === '—') return new Date().toISOString().slice(0, 10);
+
+    // 1. YYYY-MM-DD (with optional time)
+    const ymd = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (ymd) {
+      return `${ymd[1]}-${String(ymd[2]).padStart(2, '0')}-${String(ymd[3]).padStart(2, '0')}`;
+    }
+
+    // 2. DD-MM-YYYY or DD/MM/YYYY
+    const dmy = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+    if (dmy) {
+      return `${dmy[3]}-${String(dmy[2]).padStart(2, '0')}-${String(dmy[1]).padStart(2, '0')}`;
+    }
+
+    // 3. DD MMM YYYY (e.g. "12 Sep 2026" or "13 Sep 2026, 07:42 PM")
+    const ddMmmYyyy = s.match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})/);
+    if (ddMmmYyyy) {
+      const day = String(ddMmmYyyy[1]).padStart(2, '0');
+      const mIdx = MONTH_NAMES.findIndex(
+        (m) => m.toLowerCase() === ddMmmYyyy[2].toLowerCase()
+      );
+      if (mIdx !== -1) {
+        const month = String(mIdx + 1).padStart(2, '0');
+        return `${ddMmmYyyy[3]}-${month}-${day}`;
+      }
+    }
+
+    // 4. Fallback Date parse
+    const parsed = new Date(s);
+    if (!Number.isNaN(parsed.getTime())) {
+      return formatDateToISTDateOnly(parsed);
+    }
+  }
+  return new Date().toISOString().slice(0, 10);
+}
+
+function formatDateToISTDateOnly(d) {
+  const ist = new Date(d.getTime() + IST_OFFSET_MS);
+  const y = ist.getUTCFullYear();
+  const m = String(ist.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(ist.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/**
  * Common formatter for Paid Date across all tables, cards, modals, and receipts.
  * Returns "DD MMM YYYY, hh:mm A" if time is available (e.g. "04 Sep 2026, 11:41 AM"),
  * or "DD MMM YYYY" if time is not available (e.g. "04 Sep 2026").
@@ -68,8 +133,11 @@ export function formatPaidDate(input, options = {}) {
   ) {
     const rawPaid = input.paidDate;
     const rawCreated = input.createdAt;
-    if (rawPaid && typeof rawPaid === 'string' && rawPaid.trim().length > 10) {
+    // Always prioritize the actual paid date or due date over database insert timestamp (createdAt)
+    if (rawPaid && String(rawPaid).trim() && String(rawPaid).trim() !== '—') {
       value = rawPaid;
+    } else if (input.dueDate && String(input.dueDate).trim() && String(input.dueDate).trim() !== '—') {
+      value = input.dueDate;
     } else if (rawCreated) {
       value = rawCreated;
     } else {
@@ -178,5 +246,122 @@ function formatDateObject(date, dateOnly = false) {
   const hStr = String(h).padStart(2, '0');
 
   return `${d} ${m} ${y}, ${hStr}:${min} ${ampm}`;
+}
+
+/**
+ * Add N days to a YYYY-MM-DD or ISO date string and return YYYY-MM-DD.
+ * @param {string|Date} dateInput
+ * @param {number} days
+ * @returns {string} YYYY-MM-DD
+ */
+export function addDaysToDate(dateInput, days) {
+  let d;
+  if (!dateInput) {
+    d = new Date();
+  } else if (typeof dateInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateInput.trim())) {
+    const parts = dateInput.trim().split('-');
+    d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+  } else {
+    d = new Date(dateInput);
+  }
+  if (Number.isNaN(d.getTime())) d = new Date();
+  d.setDate(d.getDate() + Number(days || 0));
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/**
+ * Add N months to a YYYY-MM-DD or ISO date string and return YYYY-MM-DD.
+ * @param {string|Date} dateInput
+ * @param {number} months
+ * @returns {string} YYYY-MM-DD
+ */
+export function addMonthsToDate(dateInput, months) {
+  let d;
+  if (!dateInput) {
+    d = new Date();
+  } else if (typeof dateInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateInput.trim())) {
+    const parts = dateInput.trim().split('-');
+    d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+  } else {
+    d = new Date(dateInput);
+  }
+  if (Number.isNaN(d.getTime())) d = new Date();
+  d.setMonth(d.getMonth() + Number(months || 0));
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/**
+ * Generate installment schedule breakdown from a paid lump sum amount.
+ * @param {object} params
+ * @param {number} params.totalAmount - Total amount paid (e.g. 2000)
+ * @param {number} params.installmentAmount - Daily or monthly installment amount (e.g. 200 or 100)
+ * @param {'Daily'|'Monthly'|'Weekly'} [params.frequency='Daily']
+ * @param {string} [params.startDate] - Payment start date "YYYY-MM-DD"
+ * @param {string} [params.mode='Cash'] - Payment mode
+ * @returns {Array<{ installmentNo: string, index: number, dueDate: string, paidDate: string, amount: number, mode: string, status: string }>}
+ */
+export function generateInstallmentSchedule({
+  totalAmount,
+  installmentAmount,
+  frequency = 'Daily',
+  startDate = new Date().toISOString().slice(0, 10),
+  mode = 'Cash',
+}) {
+  const total = Number(totalAmount) || 0;
+  const instAmt = Number(installmentAmount) || 0;
+  if (total <= 0 || instAmt <= 0) return [];
+
+  const count = Math.floor(total / instAmt);
+  const remainder = Number((total - count * instAmt).toFixed(2));
+  const prefix = frequency === 'Daily' ? 'DAY' : frequency === 'Weekly' ? 'WK' : 'MO';
+
+  const schedule = [];
+  for (let i = 0; i < count; i++) {
+    const dateStr =
+      frequency === 'Daily'
+        ? addDaysToDate(startDate, i)
+        : frequency === 'Weekly'
+          ? addDaysToDate(startDate, i * 7)
+          : addMonthsToDate(startDate, i);
+
+    schedule.push({
+      installmentNo: `${prefix}-${String(i + 1).padStart(2, '0')}`,
+      index: i + 1,
+      dueDate: dateStr,
+      paidDate: dateStr,
+      amount: instAmt,
+      mode: mode || 'Cash',
+      status: 'Paid',
+    });
+  }
+
+  if (remainder > 0) {
+    const nextIndex = count + 1;
+    const dateStr =
+      frequency === 'Daily'
+        ? addDaysToDate(startDate, count)
+        : frequency === 'Weekly'
+          ? addDaysToDate(startDate, count * 7)
+          : addMonthsToDate(startDate, count);
+
+    schedule.push({
+      installmentNo: `${prefix}-${String(nextIndex).padStart(2, '0')}`,
+      index: nextIndex,
+      dueDate: dateStr,
+      paidDate: dateStr,
+      amount: remainder,
+      mode: mode || 'Cash',
+      status: 'Paid',
+      isRemainder: true,
+    });
+  }
+
+  return schedule;
 }
 

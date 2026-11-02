@@ -153,29 +153,38 @@ await addDoc(collection(db, 'goldRates'), {
 
 | Field         | Type   | Required | Description                          |
 |---------------|--------|----------|--------------------------------------|
-| installmentNo | string | Yes      | e.g. "123456"                        |
-| dueDate       | string | Yes      | e.g. "05-Jan-2025"                   |
-| paidDate      | string | Yes      | e.g. "05-Jan-2025"                   |
-| amount        | string | Yes      | e.g. "₹ 100"                         |
+| installmentNo | string | Yes      | e.g. "DAY-01", "DAY-10", "123456"    |
+| dueDate       | string | Yes      | e.g. "2026-11-02" or "05-Jan-2025"   |
+| paidDate      | string | Yes      | e.g. "2026-11-02" or "05-Jan-2025"   |
+| amount        | string | Yes      | e.g. "200" or "₹ 200"                |
+| paidAmount    | string | No       | e.g. "200"                           |
 | mode          | string | Yes      | "Cash" \| "UPI" \| "Card" \| "Bank"  |
-| status        | string | Yes      | "Pending" \| "Paid" \| "Completed" \| "Due Soon" |
-| customerId    | string | No       | Optional link to customer            |
-| planId        | string | No       | Optional link to plan                |
+| status        | string | Yes      | "Pending" \| "Paid" \| "Completed"   |
+| customerId    | string | No       | Link to customer document ID         |
+| cusId         | string | No       | Unique Customer ID (e.g. "kalyani62868055") |
+| planId        | string | No       | Link to plan purchase document ID    |
+| planName      | string | No       | Scheme name e.g. "Daily Gold Saving Plan" |
+| source        | string | No       | "daily_split" \| "monthly_split" \| "chit_installment" \| "customer_cash" |
+| splitBatchId  | string | No       | ID linking all days in a split batch |
 | createdAt     | timestamp | Auto  | Set on create                      |
 | updatedAt     | timestamp | Auto  | Set on update                      |
 
-**Example (add installment from mobile):**
+**Example (daily split installment stored for each day):**
 
 ```javascript
+// E.g. Customer paid ₹2,000 and daily installment is ₹200 -> 10 days generated:
 await addDoc(collection(db, 'installments'), {
-  installmentNo: '123456',
-  dueDate: '05-Jan-2025',
-  paidDate: '05-Jan-2025',
-  amount: '₹ 100',
-  mode: 'UPI',
+  installmentNo: 'DAY-01',
+  dueDate: '2026-11-02',
+  paidDate: '2026-11-02',
+  amount: '200',
+  mode: 'Cash',
   status: 'Paid',
-  customerId: '',
-  planId: '',
+  customerId: 'cust-doc-id',
+  cusId: 'kalyani62868055',
+  planId: 'plan-purchase-id',
+  planName: 'Daily Gold Saving Scheme',
+  source: 'daily_split',
   createdAt: serverTimestamp(),
 });
 ```
@@ -184,28 +193,43 @@ await addDoc(collection(db, 'installments'), {
 
 ### 2.6 `planPurchases`
 
-Plan purchases (enrollments): which customer bought which plan.
+Plan purchases (enrollments): which customer bought which plan, plan type (Daily/Monthly), installment amount, and accumulated savings.
 
-| Field        | Type   | Required | Description                    |
-|-------------|--------|----------|--------------------------------|
-| customerId  | string | Yes      | Customer ID (e.g. "1234")      |
-| customerName| string | Yes      | Customer name                  |
-| planId      | string | No       | Plan document ID or code      |
-| planName    | string | Yes      | e.g. "Silver", "Gold"          |
-| startDate   | string | Yes      | e.g. "2025-01-01"              |
-| status      | string | Yes      | "Active" \| "Inactive" \| "Completed" |
-| createdAt   | timestamp | Auto  | Set on create                |
-| updatedAt   | timestamp | Auto  | Set on update                |
+| Field            | Type   | Required | Description                    |
+|-----------------|--------|----------|--------------------------------|
+| customerId      | string | Yes      | Customer ID (e.g. "1234")      |
+| cusId           | string | No       | Unique Customer ID (e.g. "kalyani62868055") |
+| customerName    | string | Yes      | Customer name                  |
+| planId          | string | No       | Plan document ID or code       |
+| planName        | string | Yes      | e.g. "Daily Gold Saving Plan"  |
+| plan            | string | Yes      | "Daily" \| "Monthly" \| "Weekly" |
+| amount          | number | Yes      | Installment amount (e.g. 200/day or 1000/mo) |
+| installmentAmount | number | No     | Installment amount             |
+| dailyAmount     | number | No       | Daily installment amount       |
+| savedAmount     | number | No       | Total paid/accumulated amount (e.g. 2000) |
+| paidInstallments| number | No       | Days or months paid (e.g. 10 or 20) |
+| durationMonths  | number | No       | Duration in months (e.g. 11)   |
+| durationDays    | number | No       | Duration in days (for daily plans) |
+| startDate       | string | Yes      | e.g. "2026-11-02"              |
+| status          | string | Yes      | "Active" \| "Inactive" \| "Completed" \| "Closed" \| "Cancelled" |
+| createdAt       | timestamp | Auto  | Set on create                |
+| updatedAt       | timestamp | Auto  | Set on update                |
 
-**Example (add plan purchase from mobile):**
+**Example (daily plan enrollment with ₹2,000 paid split into ₹200/day for 10 days):**
 
 ```javascript
 await addDoc(collection(db, 'planPurchases'), {
-  customerId: '1234',
-  customerName: 'Sunil',
-  planId: 'plan-doc-id',
-  planName: 'Silver',
-  startDate: '2025-01-01',
+  customerId: 'cust-doc-id',
+  cusId: 'kalyani62868055',
+  customerName: 'Dinesh Kumar',
+  planName: 'Daily Gold Saving Plan',
+  plan: 'Daily',
+  amount: 200,             // Daily installment amount
+  dailyAmount: 200,
+  savedAmount: 2000,        // Total paid amount
+  paidInstallments: 10,     // 10 days paid (2000 / 200)
+  durationDays: 10,
+  startDate: '2026-11-02',
   status: 'Active',
   createdAt: serverTimestamp(),
 });

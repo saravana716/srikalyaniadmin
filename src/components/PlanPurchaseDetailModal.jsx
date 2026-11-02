@@ -128,6 +128,7 @@ export const PlanPurchaseDetailModal = ({
   onCloseAccount,
   onCancelChit,
   onOpenPaymentHistory,
+  onEditPlan,
 }) => {
   const [paymentHistory, setPaymentHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -165,11 +166,19 @@ export const PlanPurchaseDetailModal = ({
   const isClosedOrCancelled = isCancelled || isClosed;
   const weightInfo = savedWeightMeta(savedRupees, rates, row);
 
+  const planTypeStr = String(row.plan || row.planType || 'Monthly').toLowerCase().includes('daily') ? 'Daily' : 'Monthly';
+  const installmentAmt = row.dailyAmount || row.installmentAmount || row.amount || 0;
+
   return (
     <div style={styles.modalOverlay} onClick={onClose}>
       <div style={{ ...styles.modalBox, maxWidth: '860px' }} onClick={(e) => e.stopPropagation()}>
         <div style={styles.modalHeader}>
-          <h2 style={styles.modalTitle}>Detailed Plan Purchase Information</h2>
+          <div>
+            <h2 style={styles.modalTitle}>Detailed Plan Purchase Information</h2>
+            <p style={{ margin: '3px 0 0 0', fontSize: '12.5px', color: '#6b7280' }}>
+              Customer: <strong style={{ color: '#111827' }}>{row.name || row.customerName}</strong> ({row.cusId || row.customerId || 'No ID'}) · Plan: <strong style={{ color: MAROON }}>{planTypeStr} Plan</strong>
+            </p>
+          </div>
           <button type="button" style={styles.modalClose} onClick={onClose} aria-label="Close">
             ✕
           </button>
@@ -190,18 +199,39 @@ export const PlanPurchaseDetailModal = ({
           </div>
 
           <div style={styles.detailSection}>
-            <h3 style={styles.sectionTitle}>Plan & Enrollment</h3>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <h3 style={{ ...styles.sectionTitle, margin: 0 }}>Plan & Enrollment</h3>
+              {onEditPlan && !isClosedOrCancelled && (
+                <button
+                  type="button"
+                  style={{
+                    padding: '5px 12px',
+                    fontSize: '12.5px',
+                    fontWeight: '600',
+                    color: '#0369a1',
+                    backgroundColor: '#e0f2fe',
+                    border: '1px solid #bae6fd',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => onEditPlan(row)}
+                >
+                  ⚡ Plan Change & Split
+                </button>
+              )}
+            </div>
             <div style={styles.detailGrid}>
               <DetailItem label="Plan Name" value={row.name || row.planName} />
-              <DetailItem label="Plan Type" value={row.plan || row.type} />
+              <DetailItem label="Plan Frequency" value={`${planTypeStr} Plan`} />
+              <DetailItem
+                label={planTypeStr === 'Daily' ? 'Daily Installment' : 'Monthly Installment'}
+                value={`₹${installmentAmt} / ${planTypeStr === 'Daily' ? 'day' : 'mo'}`}
+              />
               <DetailItem label="Joined Date" value={formatPaidDate(row.joinedDate || row.startDate, { dateOnly: true })} />
               <DetailItem label="Status" value={row.status} isStatus />
-              <DetailItem label="Amount" value={row.amount != null ? `₹${row.amount}` : null} />
               <DetailItem
-                label="Saved Amount"
-                value={row.savedAmount != null || row.amount != null
-                  ? `₹${row.savedAmount != null ? row.savedAmount : row.amount}`
-                  : null}
+                label="Total Saved / Paid"
+                value={formatINR(row.savedAmount ?? row.amount ?? 0)}
               />
               <DetailItem
                 label="Saved Weight"
@@ -209,7 +239,10 @@ export const PlanPurchaseDetailModal = ({
                   ? `${weightInfo.label} (${weightInfo.hint})`
                   : weightInfo.hint}
               />
-              <DetailItem label="Paid Installments" value={row.paidInstallments} />
+              <DetailItem
+                label="Paid Installments"
+                value={`${row.paidInstallments ?? 0} ${planTypeStr === 'Daily' ? 'days' : `/ ${row.durationMonths || 11} mo`}`}
+              />
             </div>
           </div>
 
@@ -251,7 +284,31 @@ export const PlanPurchaseDetailModal = ({
                           </span>
                         )}
                       </div>
-                      <span style={styles.ledgerMode}>{entry.paymentMode || entry.mode || 'Cash'}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={styles.ledgerMode}>{entry.paymentMode || entry.mode || 'Cash'}</span>
+                        {onEditPlan && !isClosedOrCancelled && (
+                          <button
+                            type="button"
+                            style={{
+                              padding: '2px 8px',
+                              fontSize: '11px',
+                              fontWeight: '600',
+                              color: '#0369a1',
+                              backgroundColor: '#e0f2fe',
+                              border: '1px solid #bae6fd',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '3px',
+                            }}
+                            onClick={() => onEditPlan(row, entry)}
+                            title={`Split only this ${formatINR(entry.paidAmount ?? entry.amount ?? 0)} payment`}
+                          >
+                            ⚡ Split this
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <div style={styles.ledgerMeta}>
                       {formatLedgerTime(entry.createdAt || entry.paidDate)}
@@ -359,6 +416,30 @@ export const PlanPurchaseDetailModal = ({
 
           {!isClosedOrCancelled && (
             <div style={styles.footerActions}>
+              {onEditPlan && (
+                <button
+                  type="button"
+                  style={{
+                    padding: '10px 18px',
+                    borderRadius: '8px',
+                    border: '1px solid #0284c7',
+                    backgroundColor: '#f0f9ff',
+                    color: '#0369a1',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                  onClick={() => {
+                    onClose?.();
+                    onEditPlan(row);
+                  }}
+                >
+                  ⚡ Plan Change & Split
+                </button>
+              )}
               {onCloseAccount && (
                 <button
                   type="button"

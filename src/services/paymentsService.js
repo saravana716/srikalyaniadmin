@@ -68,10 +68,17 @@ function mapInstallmentRow(d) {
       : statusRaw === 'Pending'
         ? 'Pending'
         : statusRaw;
+
+  let sourceLabel = 'Installment';
+  if (d.source === 'customer_cash') sourceLabel = 'Add Cash';
+  else if (d.source === 'daily_split') sourceLabel = 'Daily Split';
+  else if (d.source === 'monthly_split') sourceLabel = 'Monthly Split';
+
   return {
     id: d.id,
-    source: d.source === 'customer_cash' ? 'customer_cash' : 'installment',
-    sourceLabel: d.source === 'customer_cash' ? 'Add Cash' : 'Installment',
+    source: d.source || 'installment',
+    sourceLabel,
+    installmentNo: d.installmentNo || '',
     customerName: d.customerName || '',
     cusId: d.cusId || d.customerId || '',
     chitPlan: d.planName || d.chitPlan || '',
@@ -193,8 +200,8 @@ export function subscribeAllPayments(setData) {
 
     const merged = [...paymentRows, ...installmentRows, ...ledgerRows];
     merged.sort((a, b) => {
-      const tb = tsMillis(b.createdAt, b.paidDate || b.dueDate);
-      const ta = tsMillis(a.createdAt, a.paidDate || a.dueDate);
+      const tb = tsMillis(b.paidDate || b.dueDate, b.createdAt);
+      const ta = tsMillis(a.paidDate || a.dueDate, a.createdAt);
       return tb - ta;
     });
     setData(merged);

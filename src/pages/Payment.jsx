@@ -14,6 +14,7 @@ import { formatINR } from '../utils/currencyUtils';
 import { formatPaidDate } from '../utils/dateUtils';
 import { downloadPaymentReceipt } from '../utils/paymentReceiptPdf';
 import ChitPaymentModal from '../components/ChitPaymentModal';
+import EditPlanPurchaseModal from '../components/EditPlanPurchaseModal';
 import { getPaginationRange } from '../utils/paginationUtils';
 
 const MAROON = '#801A39';
@@ -113,7 +114,7 @@ const AddEditPaymentModal = ({ payment, onClose, onSave, error, saving }) => {
   );
 };
 
-const PaymentViewModal = ({ payment, onClose }) => {
+const PaymentViewModal = ({ payment, onClose, onSplit }) => {
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState('');
 
@@ -169,6 +170,19 @@ const PaymentViewModal = ({ payment, onClose }) => {
         </div>
         <div style={styles.modalFooter} className="app-modal-footer">
           <Button type="button" variant="secondary" onClick={onClose} disabled={downloading}>Close</Button>
+          {onSplit && (
+            <Button
+              type="button"
+              variant="secondary"
+              style={{ color: '#0369a1', borderColor: '#bae6fd', backgroundColor: '#e0f2fe' }}
+              onClick={() => {
+                onClose();
+                onSplit(payment);
+              }}
+            >
+              ⚡ Split this Payment
+            </Button>
+          )}
           <Button
             type="button"
             onClick={handleDownload}
@@ -191,6 +205,7 @@ const Payment = () => {
   const [openCardActionId, setOpenCardActionId] = useState(null);
   const [cardActionAnchorEl, setCardActionAnchorEl] = useState(null);
   const [viewModalPayment, setViewModalPayment] = useState(null);
+  const [splitRow, setSplitRow] = useState(null);
   const [showAddPaymentModal, setShowAddPaymentModal] = useState(false);
   const [editingPayment, setEditingPayment] = useState(null);
   const [saveError, setSaveError] = useState(null);
@@ -258,7 +273,14 @@ const Payment = () => {
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return payments.filter((row) => {
-      if (sourceFilter !== 'all' && row.source !== sourceFilter) return false;
+      if (sourceFilter !== 'all') {
+        if (sourceFilter === 'installment') {
+          if (row.source !== 'installment' && row.source !== 'daily_split' && row.source !== 'monthly_split')
+            return false;
+        } else if (row.source !== sourceFilter) {
+          return false;
+        }
+      }
       if (schemeFilter !== 'all') {
         const cp = String(row.chitPlan || '').toLowerCase();
         if (!cp.includes(schemeFilter.toLowerCase())) return false;
@@ -364,6 +386,27 @@ const Payment = () => {
     setViewModalPayment(row);
   };
 
+  const handleSplit = (row) => {
+    setOpenActionId(null);
+    setOpenCardActionId(null);
+    setActionAnchorEl(null);
+    setCardActionAnchorEl(null);
+    const planObj = {
+      id: row.planId || row.planPurchaseId || row.cusId,
+      customerId: row.customerId || row.cusId,
+      cusId: row.cusId,
+      customerName: row.customerName,
+      name: row.customerName,
+      mobile: row.mobile,
+      planName: row.chitPlan || row.planName || 'Daily Gold Saving Plan',
+      plan: row.planType || 'Daily',
+      planType: row.planType || 'Daily',
+      savedAmount: Number(row.paidAmount || row.amount || 0) || 0,
+      amount: Number(row.paidAmount || row.amount || 0) || 0,
+    };
+    setSplitRow({ plan: planObj, payment: row });
+  };
+
   const handleEdit = (row) => {
     if (!row?._canEdit || row._fromLedger) {
       alert('This Add Cash entry is managed from the Customers page.');
@@ -421,6 +464,17 @@ const Payment = () => {
         <PaymentViewModal
           payment={viewModalPayment}
           onClose={() => setViewModalPayment(null)}
+          onSplit={(p) => handleSplit(p)}
+        />
+      )}
+
+      {splitRow && (
+        <EditPlanPurchaseModal
+          planPurchase={splitRow.plan}
+          initialTargetPayment={splitRow.payment}
+          initialMode="split"
+          onClose={() => setSplitRow(null)}
+          onSuccess={() => setSplitRow(null)}
         />
       )}
 
@@ -560,7 +614,9 @@ const Payment = () => {
             aria-label="Filter by source"
           >
             <option value="all">All Sources</option>
-            <option value="installment">Installments</option>
+            <option value="installment">Installments (All)</option>
+            <option value="daily_split">Daily Split Installments</option>
+            <option value="monthly_split">Monthly Split Installments</option>
             <option value="customer_cash">Add Cash</option>
             <option value="payment">Manual Payments</option>
           </select>
@@ -636,7 +692,34 @@ const Payment = () => {
                     <strong>{row.chitPlan || '—'}</strong>
                   </td>
                   <td style={styles.td}>
-                    <span style={styles.sourcePill}>{row.sourceLabel}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <span
+                        style={{
+                          ...styles.sourcePill,
+                          ...(row.source === 'daily_split'
+                            ? { backgroundColor: '#fef3c7', color: '#b45309' }
+                            : row.source === 'monthly_split'
+                              ? { backgroundColor: '#e0e7ff', color: '#3730a3' }
+                              : {}),
+                        }}
+                      >
+                        {row.sourceLabel}
+                      </span>
+                      {row.installmentNo && (
+                        <span
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 700,
+                            backgroundColor: '#f3f4f6',
+                            color: '#4b5563',
+                            padding: '1px 5px',
+                            borderRadius: 4,
+                          }}
+                        >
+                          #{row.installmentNo}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td style={styles.td}>
                     <span style={{ fontWeight: 700, color: '#15803d' }}>
@@ -665,6 +748,26 @@ const Payment = () => {
                       </button>
                       <button type="button" style={styles.actionTrigger} onClick={() => handleView(row)}>
                         View
+                      </button>
+                      <button
+                        type="button"
+                        style={{
+                          padding: '4px 8px',
+                          fontSize: '12px',
+                          fontWeight: '600',
+                          color: '#0369a1',
+                          backgroundColor: '#e0f2fe',
+                          border: '1px solid #bae6fd',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '3px',
+                        }}
+                        onClick={() => handleSplit(row)}
+                        title="Split this payment into daily installments"
+                      >
+                        ⚡ Split
                       </button>
                       <button
                         type="button"
@@ -700,6 +803,7 @@ const Payment = () => {
           anchorEl={actionAnchorEl}
           busy={deleting}
           onView={() => { const row = findRow(openActionId); if (row) handleView(row); }}
+          onSplitInstallments={() => { const row = findRow(openActionId); if (row) handleSplit(row); }}
           onEdit={() => { const row = findRow(openActionId); if (row) handleEdit(row); }}
           onDelete={() => { const row = findRow(openActionId); if (row) return handleDelete(row); }}
         />
@@ -710,6 +814,7 @@ const Payment = () => {
           anchorEl={cardActionAnchorEl}
           busy={deleting}
           onView={() => { const row = findRow(openCardActionId); if (row) handleView(row); }}
+          onSplitInstallments={() => { const row = findRow(openCardActionId); if (row) handleSplit(row); }}
           onEdit={() => { const row = findRow(openCardActionId); if (row) handleEdit(row); }}
           onDelete={() => { const row = findRow(openCardActionId); if (row) return handleDelete(row); }}
         />
@@ -739,6 +844,25 @@ const Payment = () => {
                   Receipt
                 </button>
                 <button type="button" style={styles.actionTrigger} onClick={() => handleView(row)}>View More</button>
+                <button
+                  type="button"
+                  style={{
+                    padding: '6px 12px',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    color: '#0369a1',
+                    backgroundColor: '#e0f2fe',
+                    border: '1px solid #bae6fd',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}
+                  onClick={() => handleSplit(row)}
+                >
+                  ⚡ Split
+                </button>
                 <button
                   type="button"
                   style={styles.actionMenuTrigger}

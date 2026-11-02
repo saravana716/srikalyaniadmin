@@ -31,6 +31,7 @@ import { formatToIST, formatPaidDate } from '../utils/dateUtils';
 import { formatINR } from '../utils/currencyUtils';
 import AddFundsModal from '../components/AddFundsModal';
 import CustomerPaymentHistoryModal from '../components/CustomerPaymentHistoryModal';
+import EditPlanPurchaseModal from '../components/EditPlanPurchaseModal';
 import { useLatestMetalRates } from '../hooks/useLatestMetalRates';
 import { formatSavedWeightForDisplay, savedWeightMeta } from '../utils/weightUtils';
 import { getPaginationRange } from '../utils/paginationUtils';
@@ -172,7 +173,7 @@ function normalizePlanName(str) {
   return String(str || '').trim().toLowerCase().replace(/[\s-_]+/g, '');
 }
 
-const ViewCustomerModal = ({ customer, onClose, onEdit, onAddFunds, onOpenPaymentHistory }) => {
+const ViewCustomerModal = ({ customer, onClose, onEdit, onAddFunds, onOpenPaymentHistory, onSplit }) => {
   const [ledger, setLedger] = useState([]);
   const [allPayments, setAllPayments] = useState([]);
   const [customerPlans, setCustomerPlans] = useState([]);
@@ -707,6 +708,31 @@ const ViewCustomerModal = ({ customer, onClose, onEdit, onAddFunds, onOpenPaymen
                         >
                           {entry.status === 'Paid' ? 'Completed' : entry.status || 'Completed'}
                         </span>
+                        {onSplit && (
+                          <button
+                            type="button"
+                            style={{
+                              padding: '2px 7px',
+                              fontSize: '11px',
+                              fontWeight: '600',
+                              color: '#0369a1',
+                              backgroundColor: '#e0f2fe',
+                              border: '1px solid #bae6fd',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '2px',
+                            }}
+                            onClick={() => {
+                              onClose();
+                              onSplit(entry);
+                            }}
+                            title="Split this payment into daily installments"
+                          >
+                            ⚡ Split
+                          </button>
+                        )}
                       </div>
                     </div>
                     <div style={{ ...styles.ledgerMeta, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
@@ -746,6 +772,7 @@ const Customers = () => {
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [historyCustomer, setHistoryCustomer] = useState(null);
   const [historyPlan, setHistoryPlan] = useState('all');
+  const [splitModalTarget, setSplitModalTarget] = useState(null);
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saveError, setSaveError] = useState(null);
@@ -845,6 +872,24 @@ const Customers = () => {
     setEditingCustomer(row);
   };
 
+  const handleSplitPlan = (cust, targetPayment = null) => {
+    closeMenus();
+    const planObj = {
+      id: cust.planPurchaseId || cust.cusId || cust.id,
+      customerId: cust.id,
+      cusId: cust.cusId,
+      customerName: cust.name,
+      name: cust.name,
+      mobile: cust.mobile,
+      planName: targetPayment?.chitPlan || targetPayment?.planName || cust.plan || 'Daily Gold Saving Plan',
+      plan: targetPayment?.planType || cust.plan || 'Daily',
+      planType: targetPayment?.planType || cust.plan || 'Daily',
+      savedAmount: Number(targetPayment?.paidAmount || targetPayment?.amount || cust.accountBalance || 0),
+      amount: Number(targetPayment?.paidAmount || targetPayment?.amount || cust.accountBalance || 0),
+    };
+    setSplitModalTarget({ plan: planObj, payment: targetPayment });
+  };
+
   const handleDelete = async (row) => {
     if (!row?.id) return;
     if (!window.confirm(`Delete customer "${row.name}"?`)) return;
@@ -925,6 +970,16 @@ const Customers = () => {
           onEdit={(row) => setEditingCustomer(row)}
           onAddFunds={(row) => setFundsCustomer(row)}
           onOpenPaymentHistory={(cust, planName) => handlePaymentHistory(cust, planName)}
+          onSplit={(entry) => handleSplitPlan(viewCustomer, entry)}
+        />
+      )}
+      {splitModalTarget && (
+        <EditPlanPurchaseModal
+          planPurchase={splitModalTarget.plan}
+          initialTargetPayment={splitModalTarget.payment}
+          initialMode="split"
+          onClose={() => setSplitModalTarget(null)}
+          onSuccess={() => setSplitModalTarget(null)}
         />
       )}
       {historyCustomer && (
@@ -1063,6 +1118,7 @@ const Customers = () => {
           busy={deleting}
           onView={() => { const row = filteredCustomers.find((r) => r.id === openActionId); if (row) handleView(row); }}
           onPaymentHistory={() => { const row = filteredCustomers.find((r) => r.id === openActionId); if (row) handlePaymentHistory(row, row.plan || 'all'); }}
+          onSplitInstallments={() => { const row = filteredCustomers.find((r) => r.id === openActionId); if (row) handleSplitPlan(row); }}
           onEdit={() => { const row = filteredCustomers.find((r) => r.id === openActionId); if (row) handleEdit(row); }}
           onDelete={() => { const row = filteredCustomers.find((r) => r.id === openActionId); if (row) return handleDelete(row); }}
         />
@@ -1158,6 +1214,7 @@ const Customers = () => {
           busy={deleting}
           onView={() => { const row = filteredCustomers.find((r) => r.id === openCardActionId); if (row) handleView(row); }}
           onPaymentHistory={() => { const row = filteredCustomers.find((r) => r.id === openCardActionId); if (row) handlePaymentHistory(row, row.plan || 'all'); }}
+          onSplitInstallments={() => { const row = filteredCustomers.find((r) => r.id === openCardActionId); if (row) handleSplitPlan(row); }}
           onEdit={() => { const row = filteredCustomers.find((r) => r.id === openCardActionId); if (row) handleEdit(row); }}
           onDelete={() => { const row = filteredCustomers.find((r) => r.id === openCardActionId); if (row) return handleDelete(row); }}
         />

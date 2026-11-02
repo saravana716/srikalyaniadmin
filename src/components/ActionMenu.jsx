@@ -16,6 +16,7 @@ const ActionMenu = ({
   onPayInstallment,
   onPaymentHistory,
   onEdit,
+  onSplitInstallments,
   onDelete,
   onCloseAccount,
   onCancelChit,
@@ -39,11 +40,12 @@ const ActionMenu = ({
   useEffect(() => {
     if (!isOpen || !anchorEl || !menuRef.current) return;
     const rect = anchorEl.getBoundingClientRect();
-    const hasExtra = onCloseAccount || onCancelChit || onPaymentHistory || onPayInstallment;
-    const menuWidth = hasExtra ? 160 : 120;
+    const hasExtra = onCloseAccount || onCancelChit || onPaymentHistory || onPayInstallment || onSplitInstallments;
+    const menuWidth = hasExtra ? 175 : 120;
     let itemsCount = 3; // View, Edit, Delete
     if (onPayInstallment) itemsCount++;
     if (onPaymentHistory) itemsCount++;
+    if (onSplitInstallments) itemsCount++;
     if (onCloseAccount) itemsCount++;
     if (onCancelChit) itemsCount++;
     const menuHeight = itemsCount * 36 + 16;
@@ -56,7 +58,7 @@ const ActionMenu = ({
     if (top + menuHeight > window.innerHeight - padding) top = rect.top - menuHeight - gap;
     if (top < padding) top = padding;
     setPosition({ top, left });
-  }, [isOpen, anchorEl, placement, onCloseAccount, onCancelChit, onPaymentHistory, onPayInstallment]);
+  }, [isOpen, anchorEl, placement, onCloseAccount, onCancelChit, onPaymentHistory, onPayInstallment, onSplitInstallments]);
 
   if (!isOpen) return null;
 
@@ -69,7 +71,7 @@ const ActionMenu = ({
         top: position.top,
         left: position.left,
         zIndex: PORTAL_Z_INDEX,
-        minWidth: onCloseAccount || onCancelChit || onPaymentHistory ? '160px' : '120px',
+        minWidth: onCloseAccount || onCancelChit || onPaymentHistory || onSplitInstallments ? '175px' : '120px',
         backgroundColor: '#fafafa',
         border: `1px solid ${BORDER_GRAY}`,
         borderRadius: '8px',
@@ -101,6 +103,18 @@ const ActionMenu = ({
           onClick={() => { if (busy) return; onPaymentHistory?.(); onClose(); }}
         >
           Payment History
+        </button>
+      )}
+      {onSplitInstallments && (
+        <button
+          type="button"
+          className="action-dropdown-item"
+          disabled={busy}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => { if (busy) return; onSplitInstallments?.(); onClose(); }}
+          style={{ color: '#0369a1', fontWeight: 600 }}
+        >
+          Plan Change & Split
         </button>
       )}
       <button type="button" className="action-dropdown-item" disabled={busy} onMouseDown={(e) => e.preventDefault()} onClick={() => { if (busy) return; onEdit?.(); onClose(); }}>Edit</button>
