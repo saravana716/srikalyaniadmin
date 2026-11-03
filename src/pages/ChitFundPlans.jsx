@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
 import ActionMenu from '../components/ActionMenu';
 import Button from '../components/Button';
-import { FiSettings, FiBell, FiMenu, FiX } from 'react-icons/fi';
+import { FiMenu, FiX } from 'react-icons/fi';
+
 import { MdKeyboardArrowUp, MdKeyboardArrowDown, MdMonetizationOn, MdStar, MdDiamond } from 'react-icons/md';
 import { subscribePlans, addPlan as addPlanToDb, updatePlan as updatePlanInDb, deletePlan as deletePlanFromDb } from '../services/plansService';
 
@@ -10,14 +11,33 @@ const MAROON = '#801A39';
 const LIGHT_GRAY = '#F0F0F0';
 const BORDER_GRAY = '#e0e0e0';
 
+export function formatPlanDurationDisplay(plan) {
+  if (!plan) return '—';
+  const typeStr = String(plan.type || plan.planType || plan.plan || plan.name || '').toLowerCase();
+  const isDaily = typeStr.includes('daily');
+  const isWeekly = typeStr.includes('weekly');
+  if (isDaily) {
+    const d = plan.duration || plan.durationDays || 330;
+    return `${d} Days`;
+  }
+  if (isWeekly) {
+    const w = plan.duration || plan.durationWeeks || 52;
+    return `${w} Weeks`;
+  }
+  const m = plan.duration || plan.durationMonths || 11;
+  return `${m} Months`;
+}
+
 const ViewMoreModal = ({ plan, onClose, onReminder, onNotification }) => {
   if (!plan) return null;
 
   const rows = [
     { label: 'Name:', value: plan.name || plan.planName },
     { label: 'Type:', value: plan.type },
+    { label: 'Duration:', value: formatPlanDurationDisplay(plan) },
     { label: 'Description:', value: plan.description },
   ];
+
 
   return (
     <div style={styles.viewMoreOverlay} className="view-more-modal-overlay plans-view-more-panel-overlay" onClick={onClose}>
@@ -61,21 +81,42 @@ function buildSummaryCards(plans) {
     );
     return {
       ...card,
-      value: match?.name || (plans.length ? '—' : 'No plans'),
+      value: match
+        ? `${match.name} (${formatPlanDurationDisplay(match)})`
+        : (plans.length ? '—' : 'No plans'),
     };
   });
 }
 
 const AddEditPlanModal = ({ plan, onClose, onSave, error, saving }) => {
   const isEdit = !!plan;
+  const initialType = plan?.type ?? 'Daily';
   const [name, setName] = useState(plan?.name ?? plan?.planName ?? '');
-  const [type, setType] = useState(plan?.type ?? 'Daily');
+  const [type, setType] = useState(initialType);
+  const isDaily = type === 'Daily';
+  const isWeekly = type === 'Weekly';
+  const defaultDur = isDaily ? '330' : (isWeekly ? '52' : '11');
+  const [duration, setDuration] = useState(
+    plan?.duration != null ? String(plan.duration) : defaultDur
+  );
   const [description, setDescription] = useState(plan?.description ?? '');
+
+  const handleTypeChange = (newType) => {
+    setType(newType);
+    const newIsDaily = newType === 'Daily';
+    const newIsWeekly = newType === 'Weekly';
+    const newDefault = newIsDaily ? '330' : (newIsWeekly ? '52' : '11');
+    const oldDefault = isDaily ? '330' : (isWeekly ? '52' : '11');
+    if (!duration || duration === oldDefault) {
+      setDuration(newDefault);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (saving) return;
-    await onSave({ name, type, description }, plan?.id);
+    const durNum = Number(duration) || (isDaily ? 330 : (isWeekly ? 52 : 11));
+    await onSave({ name, type, duration: durNum, description }, plan?.id);
   };
 
   return (
@@ -93,17 +134,33 @@ const AddEditPlanModal = ({ plan, onClose, onSave, error, saving }) => {
             <label style={styles.formLabel}>Name</label>
             <input type="text" value={name} onChange={(e) => setName(e.target.value)} style={styles.formInput} placeholder="e.g. Daily Gold Saving Plan" required />
           </div>
-          <div style={styles.formGroup}>
-            <label style={styles.formLabel}>Type</label>
-            <select value={type} onChange={(e) => setType(e.target.value)} style={styles.formSelect} required>
-              <option value="Daily">Daily</option>
-              <option value="Monthly">Monthly</option>
-              <option value="Weekly">Weekly</option>
-            </select>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div style={styles.formGroup}>
+              <label style={styles.formLabel}>Type</label>
+              <select value={type} onChange={(e) => handleTypeChange(e.target.value)} style={styles.formSelect} required>
+                <option value="Daily">Daily</option>
+                <option value="Monthly">Monthly</option>
+                <option value="Weekly">Weekly</option>
+              </select>
+            </div>
+            <div style={styles.formGroup}>
+              <label style={styles.formLabel}>
+                Duration ({isDaily ? 'Days' : isWeekly ? 'Weeks' : 'Months'})
+              </label>
+              <input
+                type="number"
+                min="1"
+                value={duration}
+                onChange={(e) => setDuration(e.target.value)}
+                style={styles.formInput}
+                placeholder={isDaily ? '330' : isWeekly ? '52' : '11'}
+                required
+              />
+            </div>
           </div>
           <div style={styles.formGroup}>
             <label style={styles.formLabel}>Description</label>
-            <textarea value={description} onChange={(e) => setDescription(e.target.value)} style={{ ...styles.formInput, minHeight: 90 }} placeholder="e.g. Pay for Daily, get gold" required />
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} style={{ ...styles.formInput, minHeight: 90 }} placeholder="e.g. Pay daily for 330 days, get gold" required />
           </div>
           <div style={styles.modalFooterForm} className="add-edit-plan-modal-footer">
             <Button type="button" variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button>
@@ -236,17 +293,8 @@ const ChitFundPlans = () => {
             </button>
             <h1 style={styles.pageTitle}>Chit Fund Plans</h1>
           </div>
-          <div style={styles.headerActions} className="dashboard-header-actions">
-            <div style={styles.headerIcons}>
-              <button style={styles.iconButton}><FiSettings /></button>
-              <button style={styles.iconButton}>
-                <span style={styles.notifBadge}>1</span>
-                <FiBell />
-              </button>
-              <img src="https://ui-avatars.com/api/?name=User&background=random" alt="Profile" style={styles.avatar} />
-            </div>
-          </div>
         </header>
+
 
         {/* Plan Summary Cards */}
         <div style={styles.cardsRow} className="plans-cards-row">
@@ -276,6 +324,7 @@ const ChitFundPlans = () => {
               <tr>
                 <th style={styles.th}><span className="th-content">Name <MdKeyboardArrowUp size={14} /><MdKeyboardArrowDown size={14} /></span></th>
                 <th style={styles.th}><span className="th-content">Type <MdKeyboardArrowUp size={14} /><MdKeyboardArrowDown size={14} /></span></th>
+                <th style={styles.th}><span className="th-content">Duration <MdKeyboardArrowUp size={14} /><MdKeyboardArrowDown size={14} /></span></th>
                 <th style={styles.th}><span className="th-content">Description <MdKeyboardArrowUp size={14} /><MdKeyboardArrowDown size={14} /></span></th>
                 <th style={styles.th}>Action</th>
               </tr>
@@ -286,6 +335,11 @@ const ChitFundPlans = () => {
                   <td style={styles.td}>{row.name || row.planName}</td>
                   <td style={styles.td}>
                     <span style={styles.typeBadge}>{row.type || '—'}</span>
+                  </td>
+                  <td style={styles.td}>
+                    <span style={{ fontWeight: 600, color: '#374151' }}>
+                      {formatPlanDurationDisplay(row)}
+                    </span>
                   </td>
                   <td style={styles.td}>{row.description || '—'}</td>
                   <td style={styles.tdAction}>
@@ -342,6 +396,7 @@ const ChitFundPlans = () => {
             <div key={row.id} style={styles.planCard} className="plan-card">
               <div style={styles.planCardRow}><span style={styles.planCardLabel}>Name</span><span>{row.name || row.planName}</span></div>
               <div style={styles.planCardRow}><span style={styles.planCardLabel}>Type</span><span>{row.type || '—'}</span></div>
+              <div style={styles.planCardRow}><span style={styles.planCardLabel}>Duration</span><span style={{ fontWeight: 600 }}>{formatPlanDurationDisplay(row)}</span></div>
               <div style={styles.planCardRow}><span style={styles.planCardLabel}>Description</span><span>{row.description || '—'}</span></div>
               <div style={styles.cardActionWrap}>
                 <button type="button" style={styles.actionTrigger} onClick={() => handleView(row)}>View More</button>

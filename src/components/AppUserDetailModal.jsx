@@ -1,6 +1,7 @@
 import React from 'react';
 import { FiX, FiExternalLink, FiUser, FiMapPin, FiLock, FiCreditCard, FiFileText } from 'react-icons/fi';
 import Button from './Button';
+import KycDocumentsSection from './KycDocumentsSection';
 import { formatToIST } from '../utils/dateUtils';
 import { formatINR } from '../utils/currencyUtils';
 
@@ -183,21 +184,7 @@ const AppUserDetailModal = ({ user, onClose, onEdit }) => {
           )}
 
           {/* Documents & KYC */}
-          {(user.proofType || user.proofNo || user.proofFrontUrl || user.proofBackUrl) && (
-            <div style={styles.section}>
-              <h3 style={styles.sectionTitle}>
-                <FiFileText size={16} /> KYC Verification Documents
-              </h3>
-              <div style={styles.grid}>
-                <DetailItem label="Proof Type" value={user.proofType} />
-                <DetailItem label="Proof Number" value={user.proofNo} />
-              </div>
-              <div style={styles.proofGrid}>
-                <DocumentImage rawValue={user.proofFrontUrl} label="Proof Document (Front)" />
-                <DocumentImage rawValue={user.proofBackUrl} label="Proof Document (Back)" />
-              </div>
-            </div>
-          )}
+          <KycDocumentsSection entity={user} />
         </div>
 
         <div style={styles.footer}>

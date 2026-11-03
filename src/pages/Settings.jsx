@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
-import { FiSettings, FiBell, FiMenu, FiArrowRight } from 'react-icons/fi';
+import { FiMenu, FiArrowRight } from 'react-icons/fi';
 import { MdBusiness, MdAccountBalance, MdCreditCard, MdPeople, MdNotifications } from 'react-icons/md';
-import { useAuth } from '../context/AuthContext';
+
 
 const MAROON = '#801A39';
 const LIGHT_GRAY = '#F0F0F0';
@@ -20,9 +20,7 @@ const settingCards = [
 
 const Settings = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const avatarName = encodeURIComponent(user?.name || user?.email || 'Admin');
 
   return (
     <div style={styles.container} className="dashboard-container settings-page">
@@ -38,13 +36,6 @@ const Settings = () => {
               <FiMenu size={24} color={MAROON} />
             </button>
             <h1 style={styles.pageTitle}>Settings</h1>
-          </div>
-          <div style={styles.headerActions} className="dashboard-header-actions">
-            <div style={styles.headerIcons}>
-              <button style={styles.iconButton}><FiSettings /></button>
-              <button style={styles.iconButton}><FiBell /></button>
-              <img src={`https://ui-avatars.com/api/?name=${avatarName}&background=801A39&color=fff`} alt="Profile" style={styles.avatar} />
-            </div>
           </div>
         </header>
 

@@ -2,6 +2,22 @@ import { getStorage, ref, getDownloadURL } from 'firebase/storage';
 import app from '../firebase/config';
 
 /**
+ * Normalize Firebase Storage URLs so that path slashes after /o/ are percent-encoded as %2F.
+ * Unencoded slashes cause Firebase Storage to return 400 Bad Request.
+ */
+export function normalizeFirebaseStorageUrl(url) {
+  if (!url || typeof url !== 'string') return url;
+  const match = url.match(/^(https:\/\/firebasestorage\.googleapis\.com\/v0\/b\/[^/]+\/o\/)([^?]+)(\?.*)?$/);
+  if (match) {
+    const [, prefix, rawPath, query] = match;
+    const decodedPath = decodeURIComponent(rawPath);
+    const encodedPath = encodeURIComponent(decodedPath);
+    return `${prefix}${encodedPath}${query || ''}`;
+  }
+  return url;
+}
+
+/**
  * Resolve image source from Firestore/mobile field value.
  * Supports http URLs, data URLs, and raw base64 strings.
  */
@@ -16,7 +32,7 @@ export function resolveImageSrc(value) {
     trimmed.startsWith('data:') ||
     trimmed.startsWith('blob:')
   ) {
-    return trimmed;
+    return normalizeFirebaseStorageUrl(trimmed);
   }
 
   // Raw base64 (common from mobile uploads)

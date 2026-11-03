@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
 import Button from '../components/Button';
-import { FiSettings, FiBell, FiMenu, FiX, FiEdit2, FiAlertCircle } from 'react-icons/fi';
+import { FiMenu, FiX, FiEdit2, FiAlertCircle } from 'react-icons/fi';
+
 import { MdKeyboardArrowUp, MdKeyboardArrowDown } from 'react-icons/md';
 import {
   subscribeGoldRates,
@@ -210,17 +211,8 @@ const GoldRateManage = () => {
             </button>
             <h1 style={styles.pageTitle}>Gold Rate Manage</h1>
           </div>
-          <div style={styles.headerActions} className="dashboard-header-actions">
-            <div style={styles.headerIcons}>
-              <button style={styles.iconButton}><FiSettings /></button>
-              <button style={styles.iconButton}>
-                <span style={styles.notifBadge}>1</span>
-                <FiBell />
-              </button>
-              <img src="https://ui-avatars.com/api/?name=User&background=random" alt="Profile" style={styles.avatar} />
-            </div>
-          </div>
         </header>
+
 
         <div style={styles.topRow} className="gold-rate-top-row">
           {/* Input Card */}

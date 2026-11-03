@@ -17,7 +17,6 @@ import {
     MdInventory2,
     MdLocalOffer,
     MdAdminPanelSettings,
-    MdNotifications,
 } from 'react-icons/md';
 
 const Sidebar = ({ isOpen, onClose }) => {
@@ -26,16 +25,15 @@ const Sidebar = ({ isOpen, onClose }) => {
     const [loggingOut, setLoggingOut] = useState(false);
 
     const menuItems = [
-        { name: 'Dashboard', icon: <MdDashboard />, path: '/dashboard' },
-        { name: 'Customers', icon: <MdPeople />, path: '/customers' },
-        { name: 'App Users', icon: <MdSmartphone />, path: '/app-users' },
-        { name: 'Chit Fund Plans', icon: <MdAssignment />, path: '/plans' },
-        { name: 'Plan Purchases', icon: <MdAssignment />, path: '/plan-purchases' },
-        { name: 'Payment', icon: <MdPayment />, path: '/payment' },
-        { name: 'Products', icon: <MdInventory2 />, path: '/products' },
-        { name: 'Gold Rate Manage', icon: <MdTrendingUp />, path: '/gold-rate' },
-        { name: 'Admin Accounts', icon: <MdAdminPanelSettings />, path: '/admin-accounts' },
-        { name: 'Notifications', icon: <MdNotifications />, path: '/notifications' },
+        { name: 'Dashboard', icon: <MdDashboard size={24} />, path: '/dashboard' },
+        { name: 'Customers', icon: <MdPeople size={24} />, path: '/customers' },
+        { name: 'App Users', icon: <MdSmartphone size={24} />, path: '/app-users' },
+        { name: 'Chit Fund Plans', icon: <MdAssignment size={24} />, path: '/plans' },
+        { name: 'Plan Purchases', icon: <MdAssignment size={24} />, path: '/plan-purchases' },
+        { name: 'Payment', icon: <MdPayment size={24} />, path: '/payment' },
+        { name: 'Products', icon: <MdInventory2 size={24} />, path: '/products' },
+        { name: 'Gold Rate Manage', icon: <MdTrendingUp size={24} />, path: '/gold-rate' },
+        { name: 'Admin Accounts', icon: <MdAdminPanelSettings size={24} />, path: '/admin-accounts' },
     ];
 
     const handleLogout = async () => {
@@ -149,8 +147,12 @@ const styles = {
         fontWeight: '600',
     },
     icon: {
-        marginRight: '12px',
-        fontSize: '20px',
+        marginRight: '14px',
+        fontSize: '24px',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
     },
     logoutWrap: {
         padding: '16px 12px 24px',
@@ -177,8 +179,9 @@ const styles = {
         textAlign: 'left',
     },
     logoutIcon: {
-        marginRight: '12px',
-        fontSize: '20px',
+        marginRight: '10px',
+        fontSize: '22px',
+        verticalAlign: 'middle',
     },
     closeButton: {
         position: 'absolute',

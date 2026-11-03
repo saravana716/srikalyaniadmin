@@ -5,6 +5,7 @@ import { formatINR } from '../utils/currencyUtils';
 import { formatToIST, formatPaidDate } from '../utils/dateUtils';
 import { useLatestMetalRates } from '../hooks/useLatestMetalRates';
 import { parseMoneyAmount, savedWeightMeta } from '../utils/weightUtils';
+import KycDocumentsSection from './KycDocumentsSection';
 
 const MAROON = '#801A39';
 const BORDER_GRAY = '#e0e0e0';
@@ -241,7 +242,13 @@ export const PlanPurchaseDetailModal = ({
               />
               <DetailItem
                 label="Paid Installments"
-                value={`${row.paidInstallments ?? 0} ${planTypeStr === 'Daily' ? 'days' : `/ ${row.durationMonths || 11} mo`}`}
+                value={`${row.paidInstallments ?? 0} ${
+                  planTypeStr === 'Daily'
+                    ? `/ ${row.durationDays || row.duration || ((row.durationMonths || 11) * 30) || 330} days`
+                    : planTypeStr === 'Weekly'
+                      ? `/ ${row.durationWeeks || row.duration || 52} weeks`
+                      : `/ ${row.durationMonths || row.duration || 11} months`
+                }`}
               />
             </div>
           </div>
@@ -401,18 +408,8 @@ export const PlanPurchaseDetailModal = ({
             </div>
           </div>
 
-          <div style={styles.detailSection}>
-            <h3 style={styles.sectionTitle}>Documents & Verification</h3>
-            <div style={styles.detailGrid}>
-              <DetailItem label="Proof Type" value={row.proofType || row.ProofType} />
-              <DetailItem label="Proof Number" value={row.proofNo || row.proofNumber || row.ProofNo} />
-            </div>
+          <KycDocumentsSection entity={row} style={{ margin: 0, marginTop: '20px' }} />
 
-            <div style={styles.proofImagesGrid}>
-              <DocumentImage rawValue={frontRaw} label="Bank / Proof (Front)" onOpen={openImage} />
-              <DocumentImage rawValue={backRaw} label="Bank / Proof (Back)" onOpen={openImage} />
-            </div>
-          </div>
 
           {!isClosedOrCancelled && (
             <div style={styles.footerActions}>

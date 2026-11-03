@@ -12,8 +12,6 @@ import {
   FiFilter,
   FiX,
   FiDownload,
-  FiSettings,
-  FiBell,
   FiMenu,
 } from 'react-icons/fi';
 import { MdKeyboardArrowUp, MdKeyboardArrowDown } from 'react-icons/md';
@@ -200,16 +198,6 @@ const AppUsers = () => {
               <FiMenu size={24} color={MAROON} />
             </button>
             <h1 style={styles.pageTitle}>App Users</h1>
-          </div>
-          <div style={styles.headerActions} className="dashboard-header-actions">
-            <div style={styles.headerIcons}>
-              <button style={styles.iconButton} aria-label="Settings"><FiSettings /></button>
-              <button style={styles.iconButton} aria-label="Notifications">
-                <span style={styles.notifBadge}>1</span>
-                <FiBell />
-              </button>
-              <img src="https://ui-avatars.com/api/?name=Admin&background=random" alt="Profile" style={styles.avatar} />
-            </div>
           </div>
         </header>
 

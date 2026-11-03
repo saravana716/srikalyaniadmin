@@ -321,10 +321,18 @@ const ChitPaymentModal = ({
                     const instAmt = plan.amount ? formatINR(plan.amount) : '₹—';
                     const saved = plan.savedAmount ? formatINR(plan.savedAmount) : '₹0';
                     const paidInst = plan.paidInstallments ?? 0;
-                    const totalInst = plan.durationMonths || 11;
+                    const isDaily = String(plan.planType || plan.plan || pName).toLowerCase().includes('daily');
+                    const isWeekly = String(plan.planType || plan.plan || pName).toLowerCase().includes('weekly');
+                    const durMonths = Number(plan.durationMonths) || 11;
+                    const totalInst = isDaily
+                      ? (Number(plan.durationDays) || durMonths * 30)
+                      : isWeekly
+                        ? (Number(plan.durationWeeks) || Math.round(durMonths * 4.33) || 48)
+                        : durMonths;
+                    const unitLabel = isDaily ? 'days' : isWeekly ? 'weeks' : 'mo';
                     return (
                       <option key={plan.id} value={plan.id}>
-                        {pName} — {instAmt} / inst (Saved: {saved}, {paidInst}/{totalInst} Paid) [{plan.status || 'Active'}]
+                        {pName} — {instAmt} / inst (Saved: {saved}, {paidInst}/{totalInst} {unitLabel} Paid) [{plan.status || 'Active'}]
                       </option>
                     );
                   })}
@@ -341,7 +349,11 @@ const ChitPaymentModal = ({
                 <strong>{activePlan.planName || activePlan.name || 'Gold Scheme'}</strong>
               </div>
               <div style={styles.planInfoRow}>
-                <span>Monthly Installment:</span>
+                <span>
+                  {String(activePlan.planType || activePlan.plan || activePlan.planName || '').toLowerCase().includes('daily')
+                    ? 'Daily Installment:'
+                    : 'Monthly Installment:'}
+                </span>
                 <strong>{formatINR(activePlan.amount || 0)}</strong>
               </div>
               <div style={styles.planInfoRow}>
@@ -354,7 +366,18 @@ const ChitPaymentModal = ({
               <div style={styles.planInfoRow}>
                 <span>Installments Paid:</span>
                 <strong>
-                  {activePlan.paidInstallments || 0} / {activePlan.durationMonths || 11}
+                  {(() => {
+                    const isDaily = String(activePlan.planType || activePlan.plan || activePlan.planName || '').toLowerCase().includes('daily');
+                    const isWeekly = String(activePlan.planType || activePlan.plan || activePlan.planName || '').toLowerCase().includes('weekly');
+                    const durMonths = Number(activePlan.durationMonths) || 11;
+                    const totalInst = isDaily
+                      ? (Number(activePlan.durationDays) || durMonths * 30)
+                      : isWeekly
+                        ? (Number(activePlan.durationWeeks) || Math.round(durMonths * 4.33) || 48)
+                        : durMonths;
+                    const unit = isDaily ? 'days' : isWeekly ? 'weeks' : 'months';
+                    return `${activePlan.paidInstallments || 0} / ${totalInst} ${unit}`;
+                  })()}
                 </strong>
               </div>
             </div>

@@ -2,10 +2,9 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Sidebar from '../components/Sidebar';
 import ActionMenu from '../components/ActionMenu';
 import Button from '../components/Button';
+import KycDocumentsSection from '../components/KycDocumentsSection';
 import {
   FiSearch,
-  FiSettings,
-  FiBell,
   FiMenu,
   FiFilter,
   FiX,
@@ -173,6 +172,25 @@ function normalizePlanName(str) {
   return String(str || '').trim().toLowerCase().replace(/[\s-_]+/g, '');
 }
 
+function formatPlanInstallmentText(plan) {
+  if (!plan) return '';
+  const planTypeStr = String(plan.planType || plan.plan || plan.type || plan.name || '').toLowerCase();
+  const isDaily = planTypeStr.includes('daily');
+  const isWeekly = planTypeStr.includes('weekly');
+  const paid = plan.paidInstallments ?? 0;
+
+  if (isDaily) {
+    const totalDays = Number(plan.durationDays || plan.duration) || (Number(plan.durationMonths) ? Number(plan.durationMonths) * 30 : 330);
+    return `${paid} / ${totalDays} days`;
+  }
+  if (isWeekly) {
+    const totalWeeks = Number(plan.durationWeeks || plan.duration) || 52;
+    return `${paid} / ${totalWeeks} weeks`;
+  }
+  const totalMonths = Number(plan.durationMonths || plan.duration) || 11;
+  return `${paid} / ${totalMonths} months`;
+}
+
 const ViewCustomerModal = ({ customer, onClose, onEdit, onAddFunds, onOpenPaymentHistory, onSplit }) => {
   const [ledger, setLedger] = useState([]);
   const [allPayments, setAllPayments] = useState([]);
@@ -227,16 +245,23 @@ const ViewCustomerModal = ({ customer, onClose, onEdit, onAddFunds, onOpenPaymen
       const name = (p.planName || p.name || 'Scheme Plan').trim();
       const norm = normalizePlanName(name);
       if (!norm) return;
+      const isDaily = String(p.plan || p.planType || p.type || name).toLowerCase().includes('daily');
+      const isWeekly = String(p.plan || p.planType || p.type || name).toLowerCase().includes('weekly');
+      const inferredType = isDaily ? 'Daily' : isWeekly ? 'Weekly' : (p.plan || p.planType || p.type || customer?.plan || 'Monthly');
+      const durMonths = Number(p.durationMonths) || 11;
+      const durDays = Number(p.durationDays) || (durMonths * 30);
+
       map.set(norm, {
         id: p.id,
         normKey: norm,
         name,
-        planType: p.plan || p.type || customer?.plan || 'Monthly',
+        planType: inferredType,
         status: p.status || 'Active',
         savedAmount: p.savedAmount ?? p.amount ?? 0,
         savedWeight: p.savedWeight || null,
         paidInstallments: p.paidInstallments ?? 0,
-        durationMonths: p.durationMonths || 11,
+        durationMonths: durMonths,
+        durationDays: durDays,
         planPurchase: p,
       });
     });
@@ -246,16 +271,20 @@ const ViewCustomerModal = ({ customer, onClose, onEdit, onAddFunds, onOpenPaymen
       const payPlan = (pay.chitPlan || pay.planName || '').trim();
       const norm = normalizePlanName(payPlan);
       if (norm && !map.has(norm)) {
+        const isDaily = String(payPlan || pay.planType || '').toLowerCase().includes('daily');
+        const isWeekly = String(payPlan || pay.planType || '').toLowerCase().includes('weekly');
+        const inferredType = isDaily ? 'Daily' : isWeekly ? 'Weekly' : (pay.planType || customer?.plan || 'Monthly');
         map.set(norm, {
           id: pay.planId || pay.planPurchaseId || norm,
           normKey: norm,
           name: payPlan,
-          planType: customer?.plan || 'Monthly',
+          planType: inferredType,
           status: 'Active',
           savedAmount: 0,
           savedWeight: null,
           paidInstallments: 0,
           durationMonths: 11,
+          durationDays: 330,
           planPurchase: null,
         });
       }
@@ -264,6 +293,7 @@ const ViewCustomerModal = ({ customer, onClose, onEdit, onAddFunds, onOpenPaymen
     // 3. Fallback: customer primary plan
     if (map.size === 0 && customer?.plan) {
       const norm = normalizePlanName(customer.plan);
+      const isDaily = String(customer.plan || '').toLowerCase().includes('daily');
       map.set(norm, {
         id: norm,
         normKey: norm,
@@ -274,6 +304,7 @@ const ViewCustomerModal = ({ customer, onClose, onEdit, onAddFunds, onOpenPaymen
         savedWeight: null,
         paidInstallments: 0,
         durationMonths: 11,
+        durationDays: isDaily ? 330 : null,
         planPurchase: null,
       });
     }
@@ -368,6 +399,9 @@ const ViewCustomerModal = ({ customer, onClose, onEdit, onAddFunds, onOpenPaymen
             ))}
           </div>
 
+          {/* KYC Verification Documents */}
+          <KycDocumentsSection entity={customer} extraEntities={customerPlans} />
+
           {/* Customer Enrolled Schemes Cards */}
           {customerPlans.length > 0 && (
             <div style={{ marginTop: 24, marginBottom: 8 }}>
@@ -420,7 +454,7 @@ const ViewCustomerModal = ({ customer, onClose, onEdit, onAddFunds, onOpenPaymen
                         </span>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#64748b' }}>
-                        <span>Installments: <strong>{p.paidInstallments ?? 0} / {p.durationMonths || 11}</strong></span>
+                        <span>Installments: <strong>{formatPlanInstallmentText(p)}</strong></span>
                         <span>Saved: <strong style={{ color: '#16a34a' }}>{formatINR(pSaved)}</strong></span>
                       </div>
                       {p.savedWeight ? (
@@ -536,7 +570,7 @@ const ViewCustomerModal = ({ customer, onClose, onEdit, onAddFunds, onOpenPaymen
                   Showing payments for: <strong>{activePlan.name}</strong>
                   {activePlan.savedAmount ? ` · Plan Saved: ${formatINR(activePlan.savedAmount)}` : ''}
                   {activePlan.savedWeight ? ` · ${activePlan.savedWeight} g` : ''}
-                  {activePlan.paidInstallments != null ? ` · (${activePlan.paidInstallments}/${activePlan.durationMonths} Installments)` : ''}
+                  {activePlan.paidInstallments != null ? ` · (${formatPlanInstallmentText(activePlan)})` : ''}
                 </span>
               </div>
               <button
@@ -875,7 +909,7 @@ const Customers = () => {
   const handleSplitPlan = (cust, targetPayment = null) => {
     closeMenus();
     const planObj = {
-      id: cust.planPurchaseId || cust.cusId || cust.id,
+      id: targetPayment?.planId || targetPayment?.planPurchaseId || cust.planPurchaseId || cust.id || cust.cusId,
       customerId: cust.id,
       cusId: cust.cusId,
       customerName: cust.name,
@@ -1015,16 +1049,6 @@ const Customers = () => {
               <FiMenu size={24} color={MAROON} />
             </button>
             <h1 style={styles.pageTitle}>Customers</h1>
-          </div>
-          <div style={styles.headerActions} className="dashboard-header-actions">
-            <div style={styles.headerIcons}>
-              <button style={styles.iconButton}><FiSettings /></button>
-              <button style={styles.iconButton}>
-                <span style={styles.notifBadge}>1</span>
-                <FiBell />
-              </button>
-              <img src="https://ui-avatars.com/api/?name=User&background=random" alt="Profile" style={styles.avatar} />
-            </div>
           </div>
         </header>
 

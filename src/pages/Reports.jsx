@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
-import { FiSettings, FiBell, FiMenu, FiArrowRight } from 'react-icons/fi';
+import { FiMenu, FiArrowRight } from 'react-icons/fi';
+
 import { MdDescription, MdBarChart, MdList, MdPeople } from 'react-icons/md';
 import { subscribeCustomers } from '../services/customersService';
 import { subscribePlans } from '../services/plansService';
@@ -51,14 +52,8 @@ const Reports = () => {
             </button>
             <h1 style={styles.pageTitle}>Reports</h1>
           </div>
-          <div style={styles.headerActions} className="dashboard-header-actions">
-            <div style={styles.headerIcons}>
-              <button style={styles.iconButton}><FiSettings /></button>
-              <button style={styles.iconButton}><FiBell /></button>
-              <img src="https://ui-avatars.com/api/?name=Reports&background=801A39&color=fff" alt="Profile" style={styles.avatar} />
-            </div>
-          </div>
         </header>
+
 
         <div style={styles.cardsGrid} className="reports-cards-grid">
           {reportCards.map((card) => {

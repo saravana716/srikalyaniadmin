@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import ActionMenu from '../components/ActionMenu';
 import Button from '../components/Button';
-import { FiSettings, FiBell, FiMenu, FiX, FiSearch, FiDollarSign, FiCalendar, FiPieChart, FiDownload, FiPlusCircle, FiCreditCard, FiTrash2 } from 'react-icons/fi';
+import { FiMenu, FiX, FiSearch, FiDollarSign, FiCalendar, FiPieChart, FiDownload, FiPlusCircle, FiCreditCard, FiTrash2 } from 'react-icons/fi';
+
 import { MdKeyboardArrowUp, MdKeyboardArrowDown } from 'react-icons/md';
 import {
   subscribeAllPayments,
@@ -16,6 +16,7 @@ import { formatPaidDate } from '../utils/dateUtils';
 import { downloadPaymentReceipt } from '../utils/paymentReceiptPdf';
 import ChitPaymentModal from '../components/ChitPaymentModal';
 import EditPlanPurchaseModal from '../components/EditPlanPurchaseModal';
+import KycDocumentsSection from '../components/KycDocumentsSection';
 import { getPaginationRange } from '../utils/paginationUtils';
 
 const MAROON = '#801A39';
@@ -167,6 +168,7 @@ const PaymentViewModal = ({ payment, onClose, onSplit }) => {
               </div>
             ))}
           </div>
+          <KycDocumentsSection entity={payment} style={{ margin: 0, marginTop: '16px' }} />
           {downloadError ? <p style={{ color: '#dc2626', fontSize: 13, marginTop: 16 }}>{downloadError}</p> : null}
         </div>
         <div style={styles.modalFooter} className="app-modal-footer">
@@ -199,7 +201,6 @@ const PaymentViewModal = ({ payment, onClose, onSplit }) => {
 };
 
 const Payment = () => {
-  const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [openActionId, setOpenActionId] = useState(null);
@@ -394,7 +395,7 @@ const Payment = () => {
     setActionAnchorEl(null);
     setCardActionAnchorEl(null);
     const planObj = {
-      id: row.planId || row.planPurchaseId || row.cusId,
+      id: row.planId || row.planPurchaseId || row.customerId || row.cusId,
       customerId: row.customerId || row.cusId,
       cusId: row.cusId,
       customerName: row.customerName,
@@ -522,21 +523,8 @@ const Payment = () => {
               <FiPlusCircle size={16} />
               <span>+ Record Installment</span>
             </button>
-            <div style={styles.headerIcons}>
-              <button style={styles.iconButton}><FiSettings /></button>
-              <button
-                type="button"
-                style={styles.iconButton}
-                onClick={() => navigate('/notifications')}
-                aria-label="Notifications"
-                title="Notifications"
-              >
-                <span style={styles.notifBadge}>1</span>
-                <FiBell />
-              </button>
-              <img src="https://ui-avatars.com/api/?name=User&background=random" alt="Profile" style={styles.avatar} />
-            </div>
           </div>
+
         </header>
 
         {/* Collection Summary Metric Cards */}

@@ -218,7 +218,14 @@ export async function creditPlanPurchaseAmount(planPurchaseId, creditAmount, pay
 
   const currentPaid = Number(data.paidInstallments ?? data.PaidInstallments ?? 0) || 0;
   const nextPaidInstallments = currentPaid + 1;
-  const targetDuration = Number(data.durationMonths || data.totalInstallments || 11);
+  const isDaily = String(data.plan || data.planType || data.planName || data.name || '').toLowerCase().includes('daily');
+  const isWeekly = String(data.plan || data.planType || data.planName || data.name || '').toLowerCase().includes('weekly');
+  const durMonths = Number(data.durationMonths) || 11;
+  const targetDuration = isDaily
+    ? Number(data.durationDays || (durMonths * 30))
+    : isWeekly
+      ? Number(data.durationWeeks || Math.round(durMonths * 4.33) || 48)
+      : Number(data.durationMonths || data.totalInstallments || 11);
 
   const payload = {
     amount: amountAfter,
@@ -299,7 +306,13 @@ export async function addPlanPurchase(data) {
     savedAmount: Number(data.savedAmount) || 0,
     savedWeight: Number(data.savedWeight) || 0,
     paidInstallments: Number(data.paidInstallments) || 0,
-    durationMonths: Number(data.durationMonths) || 11,
+    duration: Number(data.duration) || (String(data.plan || data.planType || '').toLowerCase().includes('daily') ? 330 : 11),
+    durationDays: String(data.plan || data.planType || '').toLowerCase().includes('daily')
+      ? (Number(data.durationDays || data.duration) || 330)
+      : (Number(data.durationDays) || (Number(data.durationMonths || 11) * 30)),
+    durationMonths: String(data.plan || data.planType || '').toLowerCase().includes('daily')
+      ? (Number(data.durationMonths) || Math.round((Number(data.durationDays || data.duration) || 330) / 30) || 11)
+      : (Number(data.durationMonths || data.duration) || 11),
     nomineeName: data.nomineeName || '',
     nomineeRelation: data.nomineeRelation || '',
     createdAt: serverTimestamp(),
@@ -683,8 +696,9 @@ export async function splitPlanInstallments(params) {
     monthlyAmount: planType === 'Monthly' ? numInst : null,
     savedAmount: nextSavedAmount,
     paidInstallments: nextPaidInstallments,
-    durationDays: planType === 'Daily' ? (currentPlan.durationDays || 365) : null,
-    durationMonths: planType === 'Monthly' ? (Number(durationMonths) || 11) : (currentPlan.durationMonths || 11),
+    duration: Number(data.duration) || (planType === 'Daily' ? (Number(data.durationDays) || currentPlan.durationDays || 330) : (Number(data.durationMonths) || currentPlan.durationMonths || 11)),
+    durationDays: planType === 'Daily' ? (Number(data.durationDays || data.duration) || currentPlan.durationDays || 330) : null,
+    durationMonths: planType === 'Monthly' ? (Number(data.durationMonths || data.duration) || currentPlan.durationMonths || 11) : (currentPlan.durationMonths || Math.round((Number(data.durationDays || data.duration) || 330) / 30) || 11),
     status: status || currentPlan.status || 'Active',
     lastSplitAt: serverTimestamp(),
     lastSplitBatchId: batchId,

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Sidebar from '../components/Sidebar';
 import ActionMenu from '../components/ActionMenu';
 import Button from '../components/Button';
-import { FiSettings, FiBell, FiMenu, FiX, FiSearch, FiLayers, FiCheckCircle, FiDollarSign, FiPlusCircle, FiTrash2 } from 'react-icons/fi';
+import { FiMenu, FiX, FiSearch, FiLayers, FiCheckCircle, FiDollarSign, FiPlusCircle, FiTrash2 } from 'react-icons/fi';
 import { GiGoldBar } from 'react-icons/gi';
 import { MdKeyboardArrowUp, MdKeyboardArrowDown, MdSwapHoriz } from 'react-icons/md';
 import {
@@ -509,14 +509,6 @@ const PlanPurchases = () => {
             <Button type="button" onClick={() => setShowAddModal(true)}>
               + Enroll in Scheme
             </Button>
-            <div style={styles.headerIcons}>
-              <button style={styles.iconButton}><FiSettings /></button>
-              <button style={styles.iconButton}>
-                <span style={styles.notifBadge}>1</span>
-                <FiBell />
-              </button>
-              <img src="https://ui-avatars.com/api/?name=User&background=random" alt="Profile" style={styles.avatar} />
-            </div>
           </div>
         </header>
 
@@ -814,9 +806,11 @@ const PlanPurchases = () => {
                   <td style={styles.td}>
                     <span style={styles.installmentPill}>
                       {row.paidInstallments ?? 0}{' '}
-                      {String(row.plan || row.planType || '').toLowerCase().includes('daily')
-                        ? 'days'
-                        : `/ ${row.durationMonths || 11} mo`}
+                      {String(row.plan || row.planType || row.planName || '').toLowerCase().includes('daily')
+                        ? `/ ${row.durationDays || row.duration || ((row.durationMonths || 11) * 30) || 330} days`
+                        : String(row.plan || row.planType || row.planName || '').toLowerCase().includes('weekly')
+                          ? `/ ${row.durationWeeks || row.duration || 52} weeks`
+                          : `/ ${row.durationMonths || row.duration || 11} months`}
                     </span>
                   </td>
                   <td style={styles.td}>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Sidebar from '../components/Sidebar';
-import { FiSettings, FiBell, FiMenu } from 'react-icons/fi';
+import { FiMenu } from 'react-icons/fi';
 import StatsCard from '../components/StatsCard';
 import RevenueChart from '../components/RevenueChart';
 import AnalyticsChart from '../components/AnalyticsChart';
@@ -12,12 +12,15 @@ import { subscribeAllPayments } from '../services/paymentsService';
 import { subscribePlanPurchases } from '../services/planPurchasesService';
 import { subscribeNotifications } from '../services/notificationsService';
 import { parseAmount, formatINR } from '../utils/currencyUtils';
+import { useLatestMetalRates } from '../hooks/useLatestMetalRates';
+import { formatWeightGrams, pickRateForPlan, calcSavedWeightGrams } from '../utils/weightUtils';
 
 const MAROON = '#801A39';
 const LIGHT_GRAY = '#F0F0F0';
 
 const Dashboard = () => {
     const { user } = useAuth();
+    const { rates } = useLatestMetalRates();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [customers, setCustomers] = useState([]);
     const [plans, setPlans] = useState([]);
@@ -69,6 +72,7 @@ const Dashboard = () => {
                         planName: pName,
                         amount: c.amount || 0,
                         savedAmount: c.accountBalance ?? c.savedAmount ?? c.amount ?? 0,
+                        savedWeight: c.savedWeight || c.goldWeight || null,
                         status: c.status || 'Active',
                     });
                 }
@@ -120,22 +124,49 @@ const Dashboard = () => {
         }, 0);
     }, [allPayments, currentMonth, currentYear]);
 
-    // Calculate dynamic pending amount across active plan purchases
-    const pendingAmount = useMemo(() => {
-        return effectivePlanPurchases.reduce((sum, p) => {
+    // Calculate total accumulated gold weight across all active/enrolled chits
+    const totalWeightGrams = useMemo(() => {
+        let totalGrams = 0;
+        (effectivePlanPurchases || []).forEach((p) => {
             const s = String(p.status || 'Active').trim().toLowerCase();
-            if (s !== 'active') return sum;
-            const targetDuration = Number(p.durationMonths) || 11;
-            const monthlyAmt = Number(p.amount) || 0;
-            const targetTotal = targetDuration * monthlyAmt;
-            const saved = Number(p.savedAmount ?? p.amount ?? 0) || 0;
-            const remaining = Math.max(0, targetTotal - saved);
-            return sum + remaining;
-        }, 0);
-    }, [effectivePlanPurchases]);
+            if (s === 'cancelled' || s === 'closed') return;
 
-    const unreadNotifs = notifications.length;
-    const avatarName = encodeURIComponent(user?.name || user?.email || 'Admin');
+            const stored = Number(p.savedWeight ?? p.goldWeight ?? p.SavedWeight);
+            if (!Number.isNaN(stored) && stored > 0) {
+                totalGrams += stored;
+                return;
+            }
+
+            const amt = Number(p.savedAmount ?? p.amount ?? 0) || 0;
+            if (amt > 0) {
+                const { ratePerGram } = pickRateForPlan(p, rates);
+                const g = calcSavedWeightGrams(amt, ratePerGram);
+                if (g != null && g > 0) {
+                    totalGrams += g;
+                }
+            }
+        });
+
+        if (totalGrams <= 0 && customers.length > 0) {
+            customers.forEach((c) => {
+                const stored = Number(c.savedWeight ?? c.goldWeight);
+                if (!Number.isNaN(stored) && stored > 0) {
+                    totalGrams += stored;
+                    return;
+                }
+                const bal = Number(c.accountBalance ?? c.amount ?? 0) || 0;
+                if (bal > 0) {
+                    const { ratePerGram } = pickRateForPlan(c, rates);
+                    const g = calcSavedWeightGrams(bal, ratePerGram);
+                    if (g != null && g > 0) {
+                        totalGrams += g;
+                    }
+                }
+            });
+        }
+
+        return Number(totalGrams.toFixed(3));
+    }, [effectivePlanPurchases, customers, rates]);
 
     return (
         <div style={styles.container} className="dashboard-container">
@@ -157,18 +188,6 @@ const Dashboard = () => {
                         </button>
                         <h1 style={styles.pageTitle}>Overview</h1>
                     </div>
-                    <div style={styles.headerActions} className="dashboard-header-actions">
-                        <div style={styles.headerIcons}>
-                            <button style={styles.iconButton}><FiSettings /></button>
-                            <button style={styles.iconButton}>
-                                {unreadNotifs > 0 && (
-                                    <span style={styles.notifBadge}>{unreadNotifs > 9 ? '9+' : unreadNotifs}</span>
-                                )}
-                                <FiBell />
-                            </button>
-                            <img src={`https://ui-avatars.com/api/?name=${avatarName}&background=801A39&color=fff`} alt="Profile" style={styles.avatar} />
-                        </div>
-                    </div>
                 </header>
 
                 <div style={styles.content} className="dashboard-content">
@@ -176,7 +195,7 @@ const Dashboard = () => {
                         <StatsCard title="Total Active Chits" value={String(activeChits)} />
                         <StatsCard title="Total Customers" value={String(customers.length)} />
                         <StatsCard title="Monthly Collection" value={formatINR(monthlyCollection)} />
-                        <StatsCard title="Pending Amount" value={formatINR(pendingAmount)} />
+                        <StatsCard title="Total Weight" value={formatWeightGrams(totalWeightGrams)} />
                     </div>
 
                     <div style={styles.chartsRow} className="charts-row">

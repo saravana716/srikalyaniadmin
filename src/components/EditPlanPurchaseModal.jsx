@@ -87,9 +87,10 @@ export default function EditPlanPurchaseModal({
     planPurchase?.startDate || new Date().toISOString().slice(0, 10)
   );
 
-  // Duration in months (for monthly chits)
-  const [durationMonths, setDurationMonths] = useState(
-    String(planPurchase?.durationMonths || 11)
+  // Duration (days for daily, months for monthly)
+  const isInitialDaily = String(planPurchase?.plan || planPurchase?.planType || '').toLowerCase().includes('daily');
+  const [duration, setDuration] = useState(
+    String(planPurchase?.duration || (isInitialDaily ? (planPurchase?.durationDays || 330) : (planPurchase?.durationMonths || 11)))
   );
 
   // Active view tab ('split' vs 'details')
@@ -180,7 +181,13 @@ export default function EditPlanPurchaseModal({
       setPlanId(selected.id);
       setPlanName(selected.name || selected.planName);
       if (selected.type) {
-        setPlanType(selected.type === 'Daily' ? 'Daily' : 'Monthly');
+        const isD = selected.type === 'Daily';
+        setPlanType(isD ? 'Daily' : 'Monthly');
+        if (selected.duration) {
+          setDuration(String(selected.duration));
+        } else {
+          setDuration(isD ? '330' : '11');
+        }
       }
     }
   };
@@ -207,12 +214,18 @@ export default function EditPlanPurchaseModal({
   const handleTogglePlanType = (newType) => {
     setPlanType(newType);
     if (newType === 'Daily') {
+      if (!duration || duration === '11') {
+        setDuration('330');
+      }
       if (numPaid >= 2000 && (!installmentAmount || Number(installmentAmount) >= 1000)) {
         setInstallmentAmount('200');
       } else if (!installmentAmount || Number(installmentAmount) <= 0) {
         setInstallmentAmount('100');
       }
     } else {
+      if (!duration || duration === '330') {
+        setDuration('11');
+      }
       if (!installmentAmount || Number(installmentAmount) < 500) {
         setInstallmentAmount('1000');
       }
@@ -258,7 +271,9 @@ export default function EditPlanPurchaseModal({
         startDate: splitStartDate,
         paymentMode,
         status,
-        durationMonths: Number(durationMonths) || 11,
+        duration: Number(duration) || (planType === 'Daily' ? 330 : 11),
+        durationDays: planType === 'Daily' ? (Number(duration) || 330) : null,
+        durationMonths: planType === 'Monthly' ? (Number(duration) || 11) : Math.round((Number(duration) || 330) / 30) || 11,
         nomineeName,
         targetPaymentId: isTargeted ? selectedPaymentId : null,
         targetPaymentSource: targetPaymentObj?.source || null,
@@ -830,13 +845,16 @@ export default function EditPlanPurchaseModal({
                   </div>
 
                   <div style={styles.formGroup}>
-                    <label style={styles.formLabel}>Duration (Months)</label>
+                    <label style={styles.formLabel}>
+                      Duration ({planType === 'Daily' ? 'Days' : 'Months'})
+                    </label>
                     <input
                       type="number"
-                      value={durationMonths}
-                      onChange={(e) => setDurationMonths(e.target.value)}
+                      min="1"
+                      value={duration}
+                      onChange={(e) => setDuration(e.target.value)}
                       style={styles.formInput}
-                      placeholder="11"
+                      placeholder={planType === 'Daily' ? '330' : '11'}
                     />
                   </div>
                 </div>

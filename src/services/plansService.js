@@ -19,17 +19,31 @@ function tsMillis(ts) {
   return 0;
 }
 
-/** Map Firestore doc — primary fields: name, type, description (mobile app schema). */
+/** Map Firestore doc — primary fields: name, type, duration, description (mobile app schema). */
 function normalizePlan(docSnap) {
   const d = docSnap.data();
   const name = d.name ?? d.Name ?? d.planName ?? d.PlanName ?? '';
-  const type = d.type ?? d.Type ?? d.plan ?? d.Plan ?? '';
+  const type = d.type ?? d.Type ?? d.plan ?? d.Plan ?? 'Monthly';
   const description = d.description ?? d.Description ?? '';
+  const isDaily = String(type).toLowerCase().includes('daily');
+  const isWeekly = String(type).toLowerCase().includes('weekly');
+  const defaultDuration = isDaily ? 330 : (isWeekly ? 52 : 11);
+  const rawDuration = d.duration ?? d.Duration ?? (isDaily ? d.durationDays : d.durationMonths);
+  const duration = rawDuration != null && !isNaN(Number(rawDuration)) && Number(rawDuration) > 0
+    ? Number(rawDuration)
+    : defaultDuration;
+  const durationUnit = d.durationUnit || (isDaily ? 'Days' : (isWeekly ? 'Weeks' : 'Months'));
+
   return {
     id: docSnap.id,
     name,
     type,
     description,
+    duration,
+    durationUnit,
+    durationDays: isDaily ? duration : (Number(d.durationDays) || duration * 30),
+    durationMonths: (!isDaily && !isWeekly) ? duration : (Number(d.durationMonths) || Math.round(duration / 30) || 11),
+    durationWeeks: isWeekly ? duration : (Number(d.durationWeeks) || Math.round(duration / 7)),
     planName: name,
     plan: type,
     status: d.status ?? d.Status ?? 'Active',
@@ -90,10 +104,21 @@ export function subscribePlans(setData, onError) {
 }
 
 export async function addPlan(data) {
+  const isDaily = String(data.type).toLowerCase().includes('daily');
+  const isWeekly = String(data.type).toLowerCase().includes('weekly');
+  const defaultDuration = isDaily ? 330 : (isWeekly ? 52 : 11);
+  const duration = Number(data.duration) || defaultDuration;
+  const durationUnit = isDaily ? 'Days' : (isWeekly ? 'Weeks' : 'Months');
+
   const ref = await addDoc(collection(db, COLLECTION), {
     name: data.name,
     type: data.type,
     description: data.description || '',
+    duration: duration,
+    durationUnit: durationUnit,
+    durationDays: isDaily ? duration : duration * 30,
+    durationMonths: (!isDaily && !isWeekly) ? duration : Math.round(duration / 30) || 11,
+    durationWeeks: isWeekly ? duration : null,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
@@ -101,10 +126,21 @@ export async function addPlan(data) {
 }
 
 export async function updatePlan(id, data) {
+  const isDaily = String(data.type).toLowerCase().includes('daily');
+  const isWeekly = String(data.type).toLowerCase().includes('weekly');
+  const defaultDuration = isDaily ? 330 : (isWeekly ? 52 : 11);
+  const duration = Number(data.duration) || defaultDuration;
+  const durationUnit = isDaily ? 'Days' : (isWeekly ? 'Weeks' : 'Months');
+
   await updateDoc(doc(db, COLLECTION, id), {
     name: data.name,
     type: data.type,
     description: data.description || '',
+    duration: duration,
+    durationUnit: durationUnit,
+    durationDays: isDaily ? duration : duration * 30,
+    durationMonths: (!isDaily && !isWeekly) ? duration : Math.round(duration / 30) || 11,
+    durationWeeks: isWeekly ? duration : null,
     updatedAt: serverTimestamp(),
   });
 }
