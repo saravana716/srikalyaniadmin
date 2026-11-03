@@ -9,6 +9,7 @@ import {
   addGoldRate as addGoldRateToDb,
   updateGoldRate as updateGoldRateInDb,
 } from '../services/goldRatesService';
+import { sendGoldRateNotification } from '../services/notificationService';
 
 const MAROON = '#801A39';
 const LIGHT_GRAY = '#F0F0F0';
@@ -33,7 +34,9 @@ const GoldRateManage = () => {
   const [goldRateInput, setGoldRateInput] = useState('');
   const [silverRateInput, setSilverRateInput] = useState('');
   const [addError, setAddError] = useState(null);
+  const [addSuccess, setAddSuccess] = useState(null);
   const [adding, setAdding] = useState(false);
+  const [notifyUsers, setNotifyUsers] = useState(true);
 
   // Edit State
   const [editingRow, setEditingRow] = useState(null);
@@ -111,9 +114,23 @@ const GoldRateManage = () => {
     setAdding(true);
     try {
       await addGoldRateToDb({ date: d, goldRate: gr, silverRate: sr });
+      
+      if (notifyUsers && (gr || sr)) {
+        try {
+          await sendGoldRateNotification(gr || '—', sr || '—');
+          setAddSuccess('Rate added & push notification sent to mobile devices!');
+        } catch (notifErr) {
+          console.warn('Failed to send push notification', notifErr);
+          setAddSuccess('Rate added successfully (Push notification could not be delivered).');
+        }
+      } else {
+        setAddSuccess('Rate added successfully!');
+      }
+
       setDate('');
       setGoldRateInput('');
       setSilverRateInput('');
+      setTimeout(() => setAddSuccess(null), 4000);
     } catch (err) {
       console.error('Add gold rate failed', err);
       setAddError(err?.message || 'Failed to add rate');
@@ -220,6 +237,7 @@ const GoldRateManage = () => {
             <h3 style={styles.inputCardTitle}>Today&apos;s Date</h3>
             <form onSubmit={handleAdd}>
               {addError && <p style={{ color: '#dc2626', marginBottom: 12, fontSize: 14 }}>{addError}</p>}
+              {addSuccess && <p style={{ color: '#059669', marginBottom: 12, fontSize: 14, fontWeight: '500' }}>{addSuccess}</p>}
               <div style={styles.inputGroup}>
                 <label style={styles.inputLabel}>Select Today&apos;s Date</label>
                 <input type="date" style={styles.input} value={date} onChange={(e) => setDate(e.target.value)} />
@@ -231,6 +249,18 @@ const GoldRateManage = () => {
               <div style={styles.inputGroup}>
                 <label style={styles.inputLabel}>Enter Silver Rate (₹ per gram)</label>
                 <input type="text" placeholder="e.g. 95" style={styles.input} value={silverRateInput} onChange={(e) => setSilverRateInput(e.target.value)} />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                <input
+                  type="checkbox"
+                  id="notifyUsers"
+                  checked={notifyUsers}
+                  onChange={(e) => setNotifyUsers(e.target.checked)}
+                  style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: MAROON }}
+                />
+                <label htmlFor="notifyUsers" style={{ fontSize: '13px', color: '#374151', cursor: 'pointer' }}>
+                  Send live push notification to mobile customers
+                </label>
               </div>
               <Button type="submit" loading={adding} loadingText="Adding…">Add</Button>
             </form>

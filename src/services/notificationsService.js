@@ -1,4 +1,4 @@
-import { collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, limit, doc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 
 const COLLECTION = 'app_notifications';
@@ -11,4 +11,8 @@ export function subscribeNotifications(setData, max = 50) {
     console.error('notifications subscribe error', err);
     setData([]);
   });
+}
+
+export async function deleteNotification(id) {
+  return deleteDoc(doc(db, COLLECTION, id));
 }

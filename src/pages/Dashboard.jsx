@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
-import { FiMenu } from 'react-icons/fi';
+import { FiMenu, FiBell } from 'react-icons/fi';
 import StatsCard from '../components/StatsCard';
 import RevenueChart from '../components/RevenueChart';
 import AnalyticsChart from '../components/AnalyticsChart';
@@ -19,6 +20,7 @@ const MAROON = '#801A39';
 const LIGHT_GRAY = '#F0F0F0';
 
 const Dashboard = () => {
+    const navigate = useNavigate();
     const { user } = useAuth();
     const { rates } = useLatestMetalRates();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -187,6 +189,29 @@ const Dashboard = () => {
                             <FiMenu size={24} color={MAROON} />
                         </button>
                         <h1 style={styles.pageTitle}>Overview</h1>
+                    </div>
+                    <div style={styles.headerActions} className="dashboard-header-actions">
+                        <div style={styles.headerIcons}>
+                            <button
+                                type="button"
+                                style={styles.iconButton}
+                                onClick={() => navigate('/notifications')}
+                                aria-label="Notifications"
+                                title="Notifications"
+                            >
+                                {notifications.length > 0 && (
+                                    <span style={styles.notifBadge}>
+                                        {notifications.length > 9 ? '9+' : notifications.length}
+                                    </span>
+                                )}
+                                <FiBell />
+                            </button>
+                            <img
+                                src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || user?.email || 'Admin')}&background=801A39&color=fff`}
+                                alt="Profile"
+                                style={styles.avatar}
+                            />
+                        </div>
                     </div>
                 </header>
 

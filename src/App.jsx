@@ -14,6 +14,7 @@ import Products from './pages/Products';
 import Offers from './pages/Offers';
 import AdminAccounts from './pages/AdminAccounts';
 import AppUsers from './pages/AppUsers';
+import Notifications from './pages/Notifications';
 
 function App() {
   return (
@@ -34,6 +35,7 @@ function App() {
           <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
           <Route path="/admin-accounts" element={<ProtectedRoute><AdminAccounts /></ProtectedRoute>} />
+          <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
           <Route path="/" element={<Navigate to="/login" replace />} />
         </Routes>
       </Router>
